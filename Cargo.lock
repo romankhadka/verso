@@ -2625,6 +2625,7 @@ dependencies = [
  "hex",
  "hyphenation",
  "insta",
+ "lru",
  "notify",
  "ratatui",
  "rbook",
