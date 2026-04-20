@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
 #[command(name = "verso", version, about = "Terminal EPUB reader")]
@@ -17,4 +18,6 @@ pub enum Command {
     PurgeOrphans,
     /// Print the effective config.
     Config,
+    /// Open an EPUB file directly (testing aid; full library UI arrives later).
+    Open { path: PathBuf },
 }
