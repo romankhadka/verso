@@ -1,8 +1,7 @@
 #[test]
 fn time_machine_chapter_1_at_68_dark() {
     use rbook::Ebook;
-    let book =
-        rbook::Epub::new(std::path::Path::new("tests/fixtures/time-machine.epub")).unwrap();
+    let book = rbook::Epub::new(std::path::Path::new("tests/fixtures/time-machine.epub")).unwrap();
     let spine = book.spine().elements();
     let first = spine.first().unwrap();
     let idref = first.name();
