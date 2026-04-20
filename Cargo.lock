@@ -2644,6 +2644,7 @@ dependencies = [
  "unicode-bidi",
  "unicode-linebreak",
  "unicode-segmentation",
+ "zip",
 ]
 
 [[package]]
