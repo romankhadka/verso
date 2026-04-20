@@ -4,7 +4,7 @@ use ratatui::layout::{Constraint, Direction, Layout};
 use std::time::{Duration, Instant};
 
 use crate::{
-    reader::{anchor, page::Page, page, sanitize, styled},
+    reader::{anchor, page::Page, page, sanitize, search::{self, SearchDirection}, styled},
     store::{bookmarks::{self, Bookmark}, db::Db},
     ui::{
         chrome::{Chrome, ChromeState},
@@ -31,6 +31,10 @@ pub struct ReaderApp {
     pub db: Option<Db>,
     pending_mark: Option<MarkMode>,
     plain_text: String,
+    search_buffer: String,
+    search_mode: Option<SearchDirection>,
+    search_matches: Vec<usize>,
+    search_cursor: usize,
 }
 
 pub fn run_with_html(html: &str, title: &str) -> Result<()> {
@@ -60,6 +64,10 @@ pub fn run_with_html_and_db(
         title: title.to_string(), keymap,
         spine_idx, book_id, db,
         pending_mark: None, plain_text,
+        search_buffer: String::new(),
+        search_mode: None,
+        search_matches: Vec::new(),
+        search_cursor: 0,
     };
 
     let res = event_loop(&mut term, &mut app);
@@ -74,6 +82,13 @@ fn current_char_offset(app: &ReaderApp) -> u64 {
         .unwrap_or(0)
 }
 
+fn seek_to_offset(app: &mut ReaderApp, target: usize) {
+    let best = app.pages.iter().position(|p|
+        p.rows.iter().any(|r| r.char_offset >= target)
+    ).unwrap_or(app.page_idx);
+    app.page_idx = best;
+}
+
 fn event_loop(term: &mut Tui, app: &mut ReaderApp) -> Result<()> {
     loop {
         let now = Instant::now();
@@ -85,8 +100,14 @@ fn event_loop(term: &mut Tui, app: &mut ReaderApp) -> Result<()> {
                 .constraints([Constraint::Min(1), Constraint::Length(if show_chrome { 1 } else { 1 })])
                 .split(area);
             ReaderView { page: app.pages.get(app.page_idx), column_width: app.column_width, theme: &app.theme }.render(f, chunks[0]);
-            let status = format!(" {} · page {}/{} ", app.title, app.page_idx + 1, app.pages.len());
-            f.render_widget(ratatui::widgets::Paragraph::new(status), chunks[1]);
+            if app.search_mode.is_some() {
+                let prefix = match app.search_mode { Some(SearchDirection::Backward) => "?", _ => "/" };
+                let status = format!("{prefix}{}", app.search_buffer);
+                f.render_widget(ratatui::widgets::Paragraph::new(status), chunks[1]);
+            } else {
+                let status = format!(" {} · page {}/{} ", app.title, app.page_idx + 1, app.pages.len());
+                f.render_widget(ratatui::widgets::Paragraph::new(status), chunks[1]);
+            }
         })?;
 
         if event::poll(Duration::from_millis(100))? {
@@ -104,6 +125,31 @@ fn event_loop(term: &mut Tui, app: &mut ReaderApp) -> Result<()> {
                     }
                     // Anything else cancels the pending mark.
                     app.pending_mark = None;
+                    continue;
+                }
+
+                // Intercept all keys while in search-query entry mode.
+                if let Some(dir) = app.search_mode {
+                    match k.code {
+                        KeyCode::Char(c) => { app.search_buffer.push(c); }
+                        KeyCode::Backspace => { app.search_buffer.pop(); }
+                        KeyCode::Enter => {
+                            app.search_matches = search::find_matches(&app.plain_text, &app.search_buffer, dir);
+                            if !app.search_matches.is_empty() {
+                                let cur = current_char_offset(app) as usize;
+                                let idx = match dir {
+                                    SearchDirection::Forward => app.search_matches.iter().position(|&m| m >= cur).unwrap_or(0),
+                                    SearchDirection::Backward => app.search_matches.iter().rposition(|&m| m <= cur).unwrap_or(app.search_matches.len() - 1),
+                                };
+                                app.search_cursor = idx;
+                                let target = app.search_matches[idx];
+                                seek_to_offset(app, target);
+                            }
+                            app.search_mode = None;
+                        }
+                        KeyCode::Esc => { app.search_mode = None; }
+                        _ => {}
+                    }
                     continue;
                 }
 
@@ -130,6 +176,29 @@ fn event_loop(term: &mut Tui, app: &mut ReaderApp) -> Result<()> {
                     }
                     Dispatch::Fire(Action::MarkSetPrompt)  => { app.pending_mark = Some(MarkMode::Set); }
                     Dispatch::Fire(Action::MarkJumpPrompt) => { app.pending_mark = Some(MarkMode::Jump); }
+                    Dispatch::Fire(Action::BeginSearchFwd)  => {
+                        app.search_mode = Some(SearchDirection::Forward);
+                        app.search_buffer.clear();
+                    }
+                    Dispatch::Fire(Action::BeginSearchBack) => {
+                        app.search_mode = Some(SearchDirection::Backward);
+                        app.search_buffer.clear();
+                    }
+                    Dispatch::Fire(Action::SearchNext) => {
+                        if !app.search_matches.is_empty() {
+                            app.search_cursor = (app.search_cursor + 1) % app.search_matches.len();
+                            let target = app.search_matches[app.search_cursor];
+                            seek_to_offset(app, target);
+                        }
+                    }
+                    Dispatch::Fire(Action::SearchPrev) => {
+                        if !app.search_matches.is_empty() {
+                            let len = app.search_matches.len();
+                            app.search_cursor = (app.search_cursor + len - 1) % len;
+                            let target = app.search_matches[app.search_cursor];
+                            seek_to_offset(app, target);
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -161,10 +230,7 @@ fn handle_mark(mode: MarkMode, letter: char, app: &mut ReaderApp) -> Result<()> 
                 if bm.spine_idx == app.spine_idx {
                     // Same spine — seek inside current paginated view.
                     let target = bm.char_offset as usize;
-                    let best = app.pages.iter().position(|p|
-                        p.rows.first().map(|r| r.char_offset).unwrap_or(0) >= target
-                    ).unwrap_or(app.page_idx);
-                    app.page_idx = best;
+                    seek_to_offset(app, target);
                 }
                 // Cross-spine jump is a no-op for v1; full support arrives with library integration.
             }
