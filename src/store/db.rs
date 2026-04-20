@@ -34,4 +34,6 @@ impl Db {
     pub fn migrate(&self) -> anyhow::Result<()> {
         super::migrate::run(&mut self.conn()?)
     }
+
+    pub fn location(&self) -> &std::path::Path { &self.path }
 }

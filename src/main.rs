@@ -53,8 +53,30 @@ fn main() -> Result<()> {
             let out = verso::export::writer::write_export(&export_dir, &slug, &md)?;
             println!("wrote {}", out.display());
         }
-        _ => {
-            println!("verso v{}", env!("CARGO_PKG_VERSION"));
+        Some(Command::Scan) => {
+            let expanded = shellexpand::tilde(&cfg.library.path).to_string();
+            let library_path = std::path::PathBuf::from(&expanded);
+            let db = verso::store::db::Db::open(&paths.db_file())?;
+            db.migrate()?;
+            let report = verso::library::scan::scan_folder(&library_path, &db)?;
+            println!("inserted={} errors={}", report.inserted, report.errors.len());
+        }
+        Some(Command::Config) => {
+            println!("{}", toml::to_string_pretty(&cfg)?);
+        }
+        Some(Command::PurgeOrphans) => {
+            println!("(Not yet implemented; see Task 46)");
+        }
+        None => {
+            let expanded = shellexpand::tilde(&cfg.library.path).to_string();
+            let library_path = std::path::PathBuf::from(&expanded);
+            std::fs::create_dir_all(&library_path)?;
+
+            let db = verso::store::db::Db::open(&paths.db_file())?;
+            db.migrate()?;
+            let report = verso::library::scan::scan_folder(&library_path, &db)?;
+            tracing::info!("startup scan inserted={} errors={}", report.inserted, report.errors.len());
+            verso::ui::library_app::run(&db, &library_path)?;
         }
     }
     Ok(())
