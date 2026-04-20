@@ -1,0 +1,21 @@
+---
+source: tests/export_markdown.rs
+expression: out
+---
+---
+title: Dune
+author: Frank Herbert
+published: 1965
+exported: 2026-04-20T14:32:00Z
+progress: 12%
+source: /tmp/dune.epub
+tags: [sci-fi]
+---
+
+## Chapter 4
+
+> A beginning is the time...
+
+**Note:** Irulan's epigraph
+
+---
