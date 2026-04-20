@@ -1,0 +1,18 @@
+[package]
+name = "verso"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "A terminal EPUB reader with vim keys and Markdown highlight export"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/<tbd>/verso"
+readme = "README.md"
+
+[[bin]]
+name = "verso"
+path = "src/main.rs"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
