@@ -4,17 +4,20 @@ use rbook::Ebook;
 use ratatui::layout::Rect;
 use std::time::Duration;
 use crate::{
+    library::{scan, watch::{self, LibraryEvent}},
     store::{db::Db, library_view::{list_rows, Sort, Filter, Row}},
     ui::{library_view::LibraryView, reader_app, terminal::{self, Tui}},
 };
 
 pub fn run(db: &Db, library_path: &std::path::Path) -> Result<()> {
+    let (watch_rx, _watcher_handle) = watch::spawn_watcher(library_path)?;
+
     let mut term = terminal::enter()?;
     let mut selected = 0usize;
     let mut sort = Sort::LastRead;
     let mut filter = Filter::All;
 
-    let res = loop_body(&mut term, db, library_path, &mut selected, &mut sort, &mut filter);
+    let res = loop_body(&mut term, db, library_path, &mut selected, &mut sort, &mut filter, &watch_rx);
     terminal::leave(&mut term)?;
     res
 }
@@ -63,8 +66,9 @@ fn build_details_text(row: &Row, d: &Details) -> String {
     lines.join("\n")
 }
 
-fn loop_body(term: &mut Tui, db: &Db, _library_path: &std::path::Path,
-             selected: &mut usize, sort: &mut Sort, filter: &mut Filter) -> Result<()> {
+fn loop_body(term: &mut Tui, db: &Db, library_path: &std::path::Path,
+             selected: &mut usize, sort: &mut Sort, filter: &mut Filter,
+             watch_rx: &crossbeam_channel::Receiver<LibraryEvent>) -> Result<()> {
     let mut details_open = false;
     loop {
         let rows: Vec<Row> = list_rows(&db.conn()?, *sort, *filter)?;
@@ -99,6 +103,14 @@ fn loop_body(term: &mut Tui, db: &Db, _library_path: &std::path::Path,
                 f.render_widget(para, panel);
             }
         })?;
+
+        let mut needs_rescan = false;
+        while let Ok(_ev) = watch_rx.try_recv() {
+            needs_rescan = true;
+        }
+        if needs_rescan {
+            let _ = scan::scan_folder(library_path, db);
+        }
 
         if event::poll(Duration::from_millis(200))? {
             if let Event::Key(k) = event::read()? {
