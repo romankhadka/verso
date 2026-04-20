@@ -49,6 +49,24 @@ pub fn scan_folder(dir: &Path, db: &Db) -> anyhow::Result<ScanReport> {
             _id => { report.inserted += 1; } // For v1 we just count all as "inserted"; refine later.
         }
     }
+
+    // Soft-delete books whose on-disk file has vanished (only books under this scan dir).
+    let dir_prefix = dir.to_string_lossy().to_string();
+    let orphaned: Vec<(i64, String)> = conn.prepare(
+        "SELECT id, path FROM books WHERE deleted_at IS NULL AND path LIKE ? || '%'"
+    )?
+    .query_map(rusqlite::params![dir_prefix], |r| Ok((r.get(0)?, r.get(1)?)))?
+    .collect::<Result<_, _>>()?;
+
+    for (id, p) in orphaned {
+        if !std::path::Path::new(&p).exists() {
+            conn.execute(
+                "UPDATE books SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?",
+                rusqlite::params![id],
+            )?;
+        }
+    }
+
     Ok(report)
 }
 
