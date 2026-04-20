@@ -65,7 +65,35 @@ fn main() -> Result<()> {
             println!("{}", toml::to_string_pretty(&cfg)?);
         }
         Some(Command::PurgeOrphans) => {
-            println!("(Not yet implemented; see Task 46)");
+            let db = verso::store::db::Db::open(&paths.db_file())?;
+            let c = db.conn()?;
+            let orphans: Vec<(i64, String)> = c.prepare(
+                "SELECT id, title FROM books WHERE deleted_at IS NOT NULL"
+            )?
+            .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?
+            .collect::<Result<_, _>>()?;
+            if orphans.is_empty() { println!("no orphans"); return Ok(()); }
+            println!("About to permanently purge {} books and all their highlights/bookmarks:", orphans.len());
+            for (_, t) in &orphans { println!("  - {t}"); }
+            print!("Proceed? [y/N] ");
+            use std::io::Write;
+            std::io::stdout().flush()?;
+            let mut line = String::new();
+            std::io::stdin().read_line(&mut line)?;
+            if !line.trim().eq_ignore_ascii_case("y") {
+                println!("aborted"); return Ok(());
+            }
+            let mut c = db.conn()?;
+            let tx = c.transaction()?;
+            for (id, _) in &orphans {
+                tx.execute("DELETE FROM highlights WHERE book_id=?", [id])?;
+                tx.execute("DELETE FROM bookmarks  WHERE book_id=?", [id])?;
+                tx.execute("DELETE FROM progress   WHERE book_id=?", [id])?;
+                tx.execute("DELETE FROM book_tags  WHERE book_id=?", [id])?;
+                tx.execute("DELETE FROM books      WHERE id=?",      [id])?;
+            }
+            tx.commit()?;
+            println!("purged {}", orphans.len());
         }
         None => {
             let expanded = shellexpand::tilde(&cfg.library.path).to_string();
