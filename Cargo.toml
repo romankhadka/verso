@@ -48,6 +48,7 @@ hyphenation = { version = "0.8", features = ["embed_en-us"] }
 notify = "6"
 sha2 = "0.10"
 hex = "0.4"
+serde_json = "1"
 time = { version = "0.3", features = ["formatting", "parsing", "serde"] }
 zip = "0.6"
 
@@ -55,4 +56,5 @@ zip = "0.6"
 insta = { version = "1", features = ["yaml"] }
 tempfile = "3"
 zip = "0.6"
+serde_json = "1"
 
