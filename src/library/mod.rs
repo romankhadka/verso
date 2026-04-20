@@ -1,1 +1,1 @@
-//! library module. Populated in later tasks.
+pub mod epub_meta;
