@@ -17,6 +17,12 @@ use crate::{
 #[derive(Debug, Clone, Copy)]
 enum MarkMode { Set, Jump }
 
+#[derive(Debug, Clone, Copy)]
+pub enum Mode {
+    Normal,
+    Visual { anchor_char_offset: usize },
+}
+
 pub struct ReaderApp {
     pub pages: Vec<Page>,
     pub page_idx: usize,
@@ -29,6 +35,7 @@ pub struct ReaderApp {
     pub spine_idx: u32,
     pub book_id: Option<i64>,
     pub db: Option<Db>,
+    pub mode: Mode,
     pending_mark: Option<MarkMode>,
     plain_text: String,
     search_buffer: String,
@@ -63,6 +70,7 @@ pub fn run_with_html_and_db(
         theme: "dark".into(), chrome: Chrome::new(Duration::from_millis(3000)),
         title: title.to_string(), keymap,
         spine_idx, book_id, db,
+        mode: Mode::Normal,
         pending_mark: None, plain_text,
         search_buffer: String::new(),
         search_mode: None,
@@ -105,7 +113,11 @@ fn event_loop(term: &mut Tui, app: &mut ReaderApp) -> Result<()> {
                 let status = format!("{prefix}{}", app.search_buffer);
                 f.render_widget(ratatui::widgets::Paragraph::new(status), chunks[1]);
             } else {
-                let status = format!(" {} · page {}/{} ", app.title, app.page_idx + 1, app.pages.len());
+                let mode_str = match app.mode {
+                    Mode::Visual { .. } => " [VIS] ",
+                    Mode::Normal => "",
+                };
+                let status = format!("{} {} · page {}/{} ", mode_str, app.title, app.page_idx + 1, app.pages.len());
                 f.render_widget(ratatui::widgets::Paragraph::new(status), chunks[1]);
             }
         })?;
@@ -166,7 +178,24 @@ fn event_loop(term: &mut Tui, app: &mut ReaderApp) -> Result<()> {
                     }
                     Dispatch::Fire(Action::GotoTop) => app.page_idx = 0,
                     Dispatch::Fire(Action::GotoBottom) => app.page_idx = app.pages.len().saturating_sub(1),
-                    Dispatch::Fire(Action::QuitToLibrary) => break,
+                    Dispatch::Fire(Action::QuitToLibrary) => {
+                        match app.mode {
+                            Mode::Visual { .. } => app.mode = Mode::Normal,
+                            Mode::Normal => break,
+                        }
+                    }
+                    Dispatch::Fire(Action::VisualSelect) => {
+                        let off = current_char_offset(app) as usize;
+                        app.mode = Mode::Visual { anchor_char_offset: off };
+                    }
+                    Dispatch::Fire(Action::YankHighlight) => {
+                        if let Mode::Visual { anchor_char_offset } = app.mode {
+                            let cur = current_char_offset(app) as usize;
+                            let (start, end) = if cur >= anchor_char_offset { (anchor_char_offset, cur) } else { (cur, anchor_char_offset) };
+                            save_highlight(app, start, end)?;
+                            app.mode = Mode::Normal;
+                        }
+                    }
                     Dispatch::Fire(Action::ToggleTheme) => {
                         app.theme = match app.theme.as_str() {
                             "dark" => "sepia".into(),
@@ -236,6 +265,37 @@ fn handle_mark(mode: MarkMode, letter: char, app: &mut ReaderApp) -> Result<()> 
             }
         }
     }
+    Ok(())
+}
+
+fn save_highlight(app: &mut ReaderApp, start: usize, end: usize) -> anyhow::Result<()> {
+    let Some(db) = app.db.as_ref() else { return Ok(()); };
+    let Some(book_id) = app.book_id else { return Ok(()); };
+
+    let chars: Vec<char> = app.plain_text.chars().collect();
+    if end <= start || end > chars.len() { return Ok(()); }
+
+    let text: String = chars[start..end].iter().collect();
+    let ctx_before_start = start.saturating_sub(80);
+    let ctx_after_end = (end + 80).min(chars.len());
+    let context_before: String = chars[ctx_before_start..start].iter().collect();
+    let context_after: String = chars[end..ctx_after_end].iter().collect();
+
+    let h = crate::store::highlights::Highlight {
+        id: 0, book_id,
+        spine_idx: app.spine_idx,
+        chapter_title: None,
+        char_offset_start: start as u64,
+        char_offset_end: end as u64,
+        text,
+        context_before: Some(context_before),
+        context_after: Some(context_after),
+        note: None,
+        anchor_status: crate::store::highlights::AnchorStatus::Ok,
+    };
+
+    let mut conn = db.conn()?;
+    crate::store::highlights::insert(&mut conn, &h)?;
     Ok(())
 }
 
