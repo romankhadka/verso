@@ -7,7 +7,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     let paths = Paths::from_env()?;
     let _guard = logging::init(&paths.log_dir())?;
-    let _cfg = config_load::from_path(&paths.config_file())?;
+    let cfg = config_load::from_path(&paths.config_file())?;
 
     match cli.command {
         Some(Command::Open { path }) => {
@@ -20,6 +20,38 @@ fn main() -> Result<()> {
             let html = book.read_file(manifest_item.value())?;
             let title = epub_meta::extract(&path)?.title;
             reader_app::run_with_html(&html, &title)?;
+        }
+        Some(Command::Export { target }) => {
+            let db = verso::store::db::Db::open(&paths.db_file())?;
+            db.migrate()?;
+
+            let epub = std::path::PathBuf::from(&target);
+            let meta = verso::library::epub_meta::extract(&epub)?;
+            let hash = verso::library::hashing::sha256_file(&epub).ok();
+            let conn = db.conn()?;
+            let bid: i64 = conn.query_row(
+                "SELECT id FROM books WHERE stable_id = ? OR file_hash = ? LIMIT 1",
+                rusqlite::params![meta.stable_id, hash], |r| r.get(0),
+            )?;
+            let highs = verso::store::highlights::list(&conn, bid)?;
+
+            let now = time::OffsetDateTime::now_utc()
+                .format(&time::format_description::well_known::Iso8601::DEFAULT)?;
+            let md = verso::export::markdown::render(&verso::export::markdown::BookContext {
+                title: meta.title.clone(),
+                author: meta.author.clone(),
+                published: meta.published_at.clone(),
+                progress_pct: None,
+                source_path: epub.display().to_string(),
+                tags: vec![],
+                exported_at: now,
+            }, &highs);
+
+            let export_dir = std::path::PathBuf::from(shellexpand::tilde(&cfg.library.path).to_string())
+                .join(&cfg.library.export_subdir);
+            let slug = verso::export::writer::slug_from_title(&meta.title);
+            let out = verso::export::writer::write_export(&export_dir, &slug, &md)?;
+            println!("wrote {}", out.display());
         }
         _ => {
             println!("verso v{}", env!("CARGO_PKG_VERSION"));
