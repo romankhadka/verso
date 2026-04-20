@@ -40,7 +40,7 @@ crossterm = "0.27"
 rbook = "0.5"
 scraper = "0.19"
 ammonia = "4"
-textwrap = "0.16"
+textwrap = { version = "0.16", features = ["hyphenation"] }
 unicode-linebreak = "0.1"
 unicode-bidi = "0.3"
 unicode-segmentation = "1"
