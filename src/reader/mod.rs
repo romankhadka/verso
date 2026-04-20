@@ -1,1 +1,2 @@
-//! reader module. Populated in later tasks.
+pub mod plaintext;
+pub mod sanitize;
