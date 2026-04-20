@@ -1,1 +1,3 @@
-//! config module. Populated in later tasks.
+pub mod load;
+mod schema;
+pub use schema::{Config, Library, Reader};
