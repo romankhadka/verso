@@ -9,5 +9,8 @@ fn emits_create_event() {
     std::fs::write(tmp.path().join("a.epub"), b"stub").unwrap();
 
     let ev = rx.recv_timeout(Duration::from_secs(3)).expect("no event");
-    assert!(matches!(ev, LibraryEvent::Created(_) | LibraryEvent::Changed));
+    assert!(matches!(
+        ev,
+        LibraryEvent::Created(_) | LibraryEvent::Changed
+    ));
 }

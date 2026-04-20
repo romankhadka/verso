@@ -1,4 +1,4 @@
-use verso::library::normalise::{normalise_text, normalise_author};
+use verso::library::normalise::{normalise_author, normalise_text};
 
 #[test]
 fn collapses_whitespace_and_case() {

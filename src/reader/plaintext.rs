@@ -8,9 +8,9 @@ pub fn from_html(html: &str) -> String {
     let body_sel = Selector::parse("body, html").unwrap();
 
     let mut out = String::new();
-    for root in doc.select(&body_sel) {
+    // First body element only.
+    if let Some(root) = doc.select(&body_sel).next() {
         walk(root, &mut out);
-        break; // first body element only
     }
     if out.is_empty() {
         // Fallback: some EPUB chapters are fragments without a body.
@@ -31,13 +31,34 @@ fn walk(node: scraper::ElementRef, out: &mut String) {
                 }
                 let is_block = matches!(
                     name,
-                    "p" | "div" | "br" | "h1"|"h2"|"h3"|"h4"|"h5"|"h6"
-                      | "li" | "blockquote" | "pre" | "tr" | "hr" | "figure" | "figcaption"
+                    "p" | "div"
+                        | "br"
+                        | "h1"
+                        | "h2"
+                        | "h3"
+                        | "h4"
+                        | "h5"
+                        | "h6"
+                        | "li"
+                        | "blockquote"
+                        | "pre"
+                        | "tr"
+                        | "hr"
+                        | "figure"
+                        | "figcaption"
                 );
-                if is_block && !out.ends_with('\n') { out.push('\n'); }
-                if let Some(er) = scraper::ElementRef::wrap(child) { walk(er, out); }
-                if matches!(name, "p" | "h1"|"h2"|"h3"|"h4"|"h5"|"h6" | "blockquote" | "pre" | "figure" ) {
-                    if !out.ends_with("\n\n") { out.push('\n'); }
+                if is_block && !out.ends_with('\n') {
+                    out.push('\n');
+                }
+                if let Some(er) = scraper::ElementRef::wrap(child) {
+                    walk(er, out);
+                }
+                if matches!(
+                    name,
+                    "p" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "blockquote" | "pre" | "figure"
+                ) && !out.ends_with("\n\n")
+                {
+                    out.push('\n');
                 }
             }
             _ => {}
@@ -71,7 +92,9 @@ fn collapse_spaces(s: &str) -> String {
     let mut prev_space = false;
     for ch in s.chars() {
         if ch.is_whitespace() {
-            if !prev_space { out.push(' '); }
+            if !prev_space {
+                out.push(' ');
+            }
             prev_space = true;
         } else {
             out.push(ch);

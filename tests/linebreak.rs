@@ -4,7 +4,9 @@ use verso::reader::linebreak::wrap;
 fn wraps_plain_text_to_column() {
     let para = "The quick brown fox jumps over the lazy dog and many other obstacles besides.";
     let lines = wrap(para, 30);
-    for l in &lines { assert!(l.chars().count() <= 30, "{l:?} > 30"); }
+    for l in &lines {
+        assert!(l.chars().count() <= 30, "{l:?} > 30");
+    }
     assert!(lines.len() >= 3);
     assert_eq!(lines.join(" "), para);
 }

@@ -1,4 +1,4 @@
-use verso::reader::styled::{to_spans, Span, Style};
+use verso::reader::styled::to_spans;
 
 #[test]
 fn extracts_spans_from_html() {

@@ -1,4 +1,7 @@
-use verso::store::{db::Db, books::{BookRow, upsert, resolve_identity, IdentityMatch}};
+use verso::store::{
+    books::{resolve_identity, upsert, BookRow, IdentityMatch},
+    db::Db,
+};
 
 fn fresh_db() -> Db {
     let tmp = tempfile::NamedTempFile::new().unwrap();
@@ -40,7 +43,11 @@ fn resolves_by_norm_fallback_when_no_ids_match() {
     row.stable_id = None;
     row.file_hash = Some("hashA".into());
     let id = upsert(&mut c, &row).unwrap();
-    let candidate = BookRow { stable_id: None, file_hash: Some("hashB".into()), ..row.clone() };
+    let candidate = BookRow {
+        stable_id: None,
+        file_hash: Some("hashB".into()),
+        ..row.clone()
+    };
     let m = resolve_identity(&c, &candidate).unwrap();
     assert!(matches!(m, Some(IdentityMatch::ByNorm(rid)) if rid == id));
 }

@@ -1,4 +1,8 @@
-use verso::store::{db::Db, books::{BookRow, upsert}, library_view::{list_rows, Sort, Filter}};
+use verso::store::{
+    books::{upsert, BookRow},
+    db::Db,
+    library_view::{list_rows, Filter, Sort},
+};
 
 #[test]
 fn lists_rows_with_defaults() {

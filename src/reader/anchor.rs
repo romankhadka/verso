@@ -3,9 +3,12 @@ use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Location {
-    #[serde(rename = "s")] pub spine_idx: u32,
-    #[serde(rename = "o")] pub char_offset: u64,
-    #[serde(rename = "h")] pub anchor_hash: String,
+    #[serde(rename = "s")]
+    pub spine_idx: u32,
+    #[serde(rename = "o")]
+    pub char_offset: u64,
+    #[serde(rename = "h")]
+    pub anchor_hash: String,
 }
 
 /// 16-hex-char SHA-256 of the 50-char window centred on `char_offset` (by char, not byte).

@@ -30,14 +30,22 @@ fn walk(node: scraper::ElementRef, style: Style, offset: &mut usize, out: &mut V
         match child.value() {
             Node::Text(t) => {
                 let text = t.to_string();
-                if text.is_empty() { continue; }
+                if text.is_empty() {
+                    continue;
+                }
                 let len = text.chars().count();
-                out.push(Span { text, style: style.clone(), char_offset: *offset });
+                out.push(Span {
+                    text,
+                    style: style.clone(),
+                    char_offset: *offset,
+                });
                 *offset += len;
             }
             Node::Element(el) => {
                 let name = el.name();
-                if matches!(name, "script" | "style" | "iframe" | "object" | "embed") { continue; }
+                if matches!(name, "script" | "style" | "iframe" | "object" | "embed") {
+                    continue;
+                }
                 let mut s = style.clone();
                 match name {
                     "em" | "i" => s.italic = true,
@@ -52,7 +60,9 @@ fn walk(node: scraper::ElementRef, style: Style, offset: &mut usize, out: &mut V
                     "h6" => s.heading = Some(6),
                     _ => {}
                 }
-                if let Some(er) = scraper::ElementRef::wrap(child) { walk(er, s, offset, out); }
+                if let Some(er) = scraper::ElementRef::wrap(child) {
+                    walk(er, s, offset, out);
+                }
             }
             _ => {}
         }

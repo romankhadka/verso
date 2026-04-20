@@ -1,4 +1,7 @@
-use verso::ui::keymap::{Action, table::{Keymap, Dispatch}};
+use verso::ui::keymap::{
+    table::{Dispatch, Keymap},
+    Action,
+};
 
 #[test]
 fn dispatches_single_key_immediately() {
@@ -19,6 +22,7 @@ fn rejects_prefix_collision() {
     let err = verso::ui::keymap::table::Keymap::from_config(&[
         ("move_down".into(), vec!["g".into()]),
         ("goto_top".into(), vec!["gg".into()]),
-    ]).unwrap_err();
+    ])
+    .unwrap_err();
     assert!(err.to_string().contains("prefix"));
 }

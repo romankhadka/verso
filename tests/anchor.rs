@@ -1,8 +1,12 @@
-use verso::reader::anchor::{Location, anchor_hash, reanchor};
+use verso::reader::anchor::{anchor_hash, reanchor, Location};
 
 #[test]
 fn location_serializes_round_trip() {
-    let loc = Location { spine_idx: 3, char_offset: 1842, anchor_hash: "abc123".into() };
+    let loc = Location {
+        spine_idx: 3,
+        char_offset: 1842,
+        anchor_hash: "abc123".into(),
+    };
     let json = serde_json::to_string(&loc).unwrap();
     let back: Location = serde_json::from_str(&json).unwrap();
     assert_eq!(loc, back);
@@ -15,7 +19,10 @@ fn anchor_hash_is_stable_in_window() {
     let h2 = anchor_hash(text, 20);
     assert_eq!(h1, h2);
     let h3 = anchor_hash(text, 21);
-    assert_eq!(h1, h3, "single-char drift should hash the same 50-char window");
+    assert_eq!(
+        h1, h3,
+        "single-char drift should hash the same 50-char window"
+    );
 }
 
 #[test]

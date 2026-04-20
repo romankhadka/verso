@@ -4,18 +4,34 @@ use ratatui::layout::{Constraint, Direction, Layout};
 use std::time::{Duration, Instant};
 
 use crate::{
-    reader::{anchor, page::Page, page, sanitize, search::{self, SearchDirection}, styled},
-    store::{bookmarks::{self, Bookmark}, db::Db},
+    reader::{
+        anchor, page,
+        page::Page,
+        sanitize,
+        search::{self, SearchDirection},
+        styled,
+    },
+    store::{
+        bookmarks::{self, Bookmark},
+        db::Db,
+    },
     ui::{
         chrome::{Chrome, ChromeState},
-        keymap::{Action, defaults, table::{Dispatch, Keymap}},
+        keymap::{
+            defaults,
+            table::{Dispatch, Keymap},
+            Action,
+        },
         reader_view::ReaderView,
         terminal::{self, Tui},
     },
 };
 
 #[derive(Debug, Clone, Copy)]
-enum MarkMode { Set, Jump }
+enum MarkMode {
+    Set,
+    Jump,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum Mode {
@@ -57,7 +73,11 @@ pub fn run_with_html_and_db(
 ) -> Result<()> {
     let safe = sanitize::clean(html);
     let spans = styled::to_spans(&safe);
-    let plain_text: String = spans.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().concat();
+    let plain_text: String = spans
+        .iter()
+        .map(|s| s.text.as_str())
+        .collect::<Vec<_>>()
+        .concat();
 
     let mut term = terminal::enter()?;
     let size = term.size()?;
@@ -66,12 +86,20 @@ pub fn run_with_html_and_db(
     let keymap = Keymap::from_config(&defaults::default_entries())?;
 
     let mut app = ReaderApp {
-        pages, page_idx: 0, row_idx: 0, column_width: col,
-        theme: "dark".into(), chrome: Chrome::new(Duration::from_millis(3000)),
-        title: title.to_string(), keymap,
-        spine_idx, book_id, db,
+        pages,
+        page_idx: 0,
+        row_idx: 0,
+        column_width: col,
+        theme: "dark".into(),
+        chrome: Chrome::new(Duration::from_millis(3000)),
+        title: title.to_string(),
+        keymap,
+        spine_idx,
+        book_id,
+        db,
         mode: Mode::Normal,
-        pending_mark: None, plain_text,
+        pending_mark: None,
+        plain_text,
         search_buffer: String::new(),
         search_mode: None,
         search_matches: Vec::new(),
@@ -84,16 +112,19 @@ pub fn run_with_html_and_db(
 }
 
 fn current_char_offset(app: &ReaderApp) -> u64 {
-    app.pages.get(app.page_idx)
+    app.pages
+        .get(app.page_idx)
         .and_then(|p| p.rows.first())
         .map(|r| r.char_offset as u64)
         .unwrap_or(0)
 }
 
 fn seek_to_offset(app: &mut ReaderApp, target: usize) {
-    let best = app.pages.iter().position(|p|
-        p.rows.iter().any(|r| r.char_offset >= target)
-    ).unwrap_or(app.page_idx);
+    let best = app
+        .pages
+        .iter()
+        .position(|p| p.rows.iter().any(|r| r.char_offset >= target))
+        .unwrap_or(app.page_idx);
     app.page_idx = best;
 }
 
@@ -102,14 +133,22 @@ fn event_loop(term: &mut Tui, app: &mut ReaderApp) -> Result<()> {
         let now = Instant::now();
         term.draw(|f| {
             let area = f.size();
-            let show_chrome = matches!(app.chrome.state(now), ChromeState::Visible);
+            let _show_chrome = matches!(app.chrome.state(now), ChromeState::Visible);
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Min(1), Constraint::Length(if show_chrome { 1 } else { 1 })])
+                .constraints([Constraint::Min(1), Constraint::Length(1)])
                 .split(area);
-            ReaderView { page: app.pages.get(app.page_idx), column_width: app.column_width, theme: &app.theme }.render(f, chunks[0]);
+            ReaderView {
+                page: app.pages.get(app.page_idx),
+                column_width: app.column_width,
+                theme: &app.theme,
+            }
+            .render(f, chunks[0]);
             if app.search_mode.is_some() {
-                let prefix = match app.search_mode { Some(SearchDirection::Backward) => "?", _ => "/" };
+                let prefix = match app.search_mode {
+                    Some(SearchDirection::Backward) => "?",
+                    _ => "/",
+                };
                 let status = format!("{prefix}{}", app.search_buffer);
                 f.render_widget(ratatui::widgets::Paragraph::new(status), chunks[1]);
             } else {
@@ -117,7 +156,13 @@ fn event_loop(term: &mut Tui, app: &mut ReaderApp) -> Result<()> {
                     Mode::Visual { .. } => " [VIS] ",
                     Mode::Normal => "",
                 };
-                let status = format!("{} {} · page {}/{} ", mode_str, app.title, app.page_idx + 1, app.pages.len());
+                let status = format!(
+                    "{} {} · page {}/{} ",
+                    mode_str,
+                    app.title,
+                    app.page_idx + 1,
+                    app.pages.len()
+                );
                 f.render_widget(ratatui::widgets::Paragraph::new(status), chunks[1]);
             }
         })?;
@@ -143,15 +188,28 @@ fn event_loop(term: &mut Tui, app: &mut ReaderApp) -> Result<()> {
                 // Intercept all keys while in search-query entry mode.
                 if let Some(dir) = app.search_mode {
                     match k.code {
-                        KeyCode::Char(c) => { app.search_buffer.push(c); }
-                        KeyCode::Backspace => { app.search_buffer.pop(); }
+                        KeyCode::Char(c) => {
+                            app.search_buffer.push(c);
+                        }
+                        KeyCode::Backspace => {
+                            app.search_buffer.pop();
+                        }
                         KeyCode::Enter => {
-                            app.search_matches = search::find_matches(&app.plain_text, &app.search_buffer, dir);
+                            app.search_matches =
+                                search::find_matches(&app.plain_text, &app.search_buffer, dir);
                             if !app.search_matches.is_empty() {
                                 let cur = current_char_offset(app) as usize;
                                 let idx = match dir {
-                                    SearchDirection::Forward => app.search_matches.iter().position(|&m| m >= cur).unwrap_or(0),
-                                    SearchDirection::Backward => app.search_matches.iter().rposition(|&m| m <= cur).unwrap_or(app.search_matches.len() - 1),
+                                    SearchDirection::Forward => app
+                                        .search_matches
+                                        .iter()
+                                        .position(|&m| m >= cur)
+                                        .unwrap_or(0),
+                                    SearchDirection::Backward => app
+                                        .search_matches
+                                        .iter()
+                                        .rposition(|&m| m <= cur)
+                                        .unwrap_or(app.search_matches.len() - 1),
                                 };
                                 app.search_cursor = idx;
                                 let target = app.search_matches[idx];
@@ -159,39 +217,47 @@ fn event_loop(term: &mut Tui, app: &mut ReaderApp) -> Result<()> {
                             }
                             app.search_mode = None;
                         }
-                        KeyCode::Esc => { app.search_mode = None; }
+                        KeyCode::Esc => {
+                            app.search_mode = None;
+                        }
                         _ => {}
                     }
                     continue;
                 }
 
                 match app.keymap.feed(&key_to_raw(k)) {
-                    Dispatch::Fire(Action::MoveDown) |
-                    Dispatch::Fire(Action::PageDown) |
-                    Dispatch::Fire(Action::HalfPageDown) => {
+                    Dispatch::Fire(Action::MoveDown)
+                    | Dispatch::Fire(Action::PageDown)
+                    | Dispatch::Fire(Action::HalfPageDown) => {
                         app.page_idx = (app.page_idx + 1).min(app.pages.len().saturating_sub(1));
                     }
-                    Dispatch::Fire(Action::MoveUp) |
-                    Dispatch::Fire(Action::PageUp) |
-                    Dispatch::Fire(Action::HalfPageUp) => {
+                    Dispatch::Fire(Action::MoveUp)
+                    | Dispatch::Fire(Action::PageUp)
+                    | Dispatch::Fire(Action::HalfPageUp) => {
                         app.page_idx = app.page_idx.saturating_sub(1);
                     }
                     Dispatch::Fire(Action::GotoTop) => app.page_idx = 0,
-                    Dispatch::Fire(Action::GotoBottom) => app.page_idx = app.pages.len().saturating_sub(1),
-                    Dispatch::Fire(Action::QuitToLibrary) => {
-                        match app.mode {
-                            Mode::Visual { .. } => app.mode = Mode::Normal,
-                            Mode::Normal => break,
-                        }
+                    Dispatch::Fire(Action::GotoBottom) => {
+                        app.page_idx = app.pages.len().saturating_sub(1)
                     }
+                    Dispatch::Fire(Action::QuitToLibrary) => match app.mode {
+                        Mode::Visual { .. } => app.mode = Mode::Normal,
+                        Mode::Normal => break,
+                    },
                     Dispatch::Fire(Action::VisualSelect) => {
                         let off = current_char_offset(app) as usize;
-                        app.mode = Mode::Visual { anchor_char_offset: off };
+                        app.mode = Mode::Visual {
+                            anchor_char_offset: off,
+                        };
                     }
                     Dispatch::Fire(Action::YankHighlight) => {
                         if let Mode::Visual { anchor_char_offset } = app.mode {
                             let cur = current_char_offset(app) as usize;
-                            let (start, end) = if cur >= anchor_char_offset { (anchor_char_offset, cur) } else { (cur, anchor_char_offset) };
+                            let (start, end) = if cur >= anchor_char_offset {
+                                (anchor_char_offset, cur)
+                            } else {
+                                (cur, anchor_char_offset)
+                            };
                             save_highlight(app, start, end)?;
                             app.mode = Mode::Normal;
                         }
@@ -203,9 +269,13 @@ fn event_loop(term: &mut Tui, app: &mut ReaderApp) -> Result<()> {
                             _ => "dark".into(),
                         };
                     }
-                    Dispatch::Fire(Action::MarkSetPrompt)  => { app.pending_mark = Some(MarkMode::Set); }
-                    Dispatch::Fire(Action::MarkJumpPrompt) => { app.pending_mark = Some(MarkMode::Jump); }
-                    Dispatch::Fire(Action::BeginSearchFwd)  => {
+                    Dispatch::Fire(Action::MarkSetPrompt) => {
+                        app.pending_mark = Some(MarkMode::Set);
+                    }
+                    Dispatch::Fire(Action::MarkJumpPrompt) => {
+                        app.pending_mark = Some(MarkMode::Jump);
+                    }
+                    Dispatch::Fire(Action::BeginSearchFwd) => {
                         app.search_mode = Some(SearchDirection::Forward);
                         app.search_buffer.clear();
                     }
@@ -213,20 +283,16 @@ fn event_loop(term: &mut Tui, app: &mut ReaderApp) -> Result<()> {
                         app.search_mode = Some(SearchDirection::Backward);
                         app.search_buffer.clear();
                     }
-                    Dispatch::Fire(Action::SearchNext) => {
-                        if !app.search_matches.is_empty() {
-                            app.search_cursor = (app.search_cursor + 1) % app.search_matches.len();
-                            let target = app.search_matches[app.search_cursor];
-                            seek_to_offset(app, target);
-                        }
+                    Dispatch::Fire(Action::SearchNext) if !app.search_matches.is_empty() => {
+                        app.search_cursor = (app.search_cursor + 1) % app.search_matches.len();
+                        let target = app.search_matches[app.search_cursor];
+                        seek_to_offset(app, target);
                     }
-                    Dispatch::Fire(Action::SearchPrev) => {
-                        if !app.search_matches.is_empty() {
-                            let len = app.search_matches.len();
-                            app.search_cursor = (app.search_cursor + len - 1) % len;
-                            let target = app.search_matches[app.search_cursor];
-                            seek_to_offset(app, target);
-                        }
+                    Dispatch::Fire(Action::SearchPrev) if !app.search_matches.is_empty() => {
+                        let len = app.search_matches.len();
+                        app.search_cursor = (app.search_cursor + len - 1) % len;
+                        let target = app.search_matches[app.search_cursor];
+                        seek_to_offset(app, target);
                     }
                     _ => {}
                 }
@@ -237,8 +303,12 @@ fn event_loop(term: &mut Tui, app: &mut ReaderApp) -> Result<()> {
 }
 
 fn handle_mark(mode: MarkMode, letter: char, app: &mut ReaderApp) -> Result<()> {
-    let Some(db) = app.db.as_ref() else { return Ok(()); };
-    let Some(book_id) = app.book_id else { return Ok(()); };
+    let Some(db) = app.db.as_ref() else {
+        return Ok(());
+    };
+    let Some(book_id) = app.book_id else {
+        return Ok(());
+    };
     let mark = letter.to_string();
     match mode {
         MarkMode::Set => {
@@ -269,11 +339,17 @@ fn handle_mark(mode: MarkMode, letter: char, app: &mut ReaderApp) -> Result<()> 
 }
 
 fn save_highlight(app: &mut ReaderApp, start: usize, end: usize) -> anyhow::Result<()> {
-    let Some(db) = app.db.as_ref() else { return Ok(()); };
-    let Some(book_id) = app.book_id else { return Ok(()); };
+    let Some(db) = app.db.as_ref() else {
+        return Ok(());
+    };
+    let Some(book_id) = app.book_id else {
+        return Ok(());
+    };
 
     let chars: Vec<char> = app.plain_text.chars().collect();
-    if end <= start || end > chars.len() { return Ok(()); }
+    if end <= start || end > chars.len() {
+        return Ok(());
+    }
 
     let text: String = chars[start..end].iter().collect();
     let ctx_before_start = start.saturating_sub(80);
@@ -282,7 +358,8 @@ fn save_highlight(app: &mut ReaderApp, start: usize, end: usize) -> anyhow::Resu
     let context_after: String = chars[end..ctx_after_end].iter().collect();
 
     let h = crate::store::highlights::Highlight {
-        id: 0, book_id,
+        id: 0,
+        book_id,
         spine_idx: app.spine_idx,
         chapter_title: None,
         char_offset_start: start as u64,

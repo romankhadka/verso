@@ -1,8 +1,12 @@
-use verso::library::epub_guard::{validate_archive, Limits, GuardError};
+use verso::library::epub_guard::{validate_archive, GuardError, Limits};
 
 #[test]
 fn time_machine_passes_guards() {
-    validate_archive(std::path::Path::new("tests/fixtures/time-machine.epub"), Limits::default()).unwrap();
+    validate_archive(
+        std::path::Path::new("tests/fixtures/time-machine.epub"),
+        Limits::default(),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -12,7 +16,8 @@ fn rejects_path_traversal() {
     {
         let file = std::fs::File::create(tmp.path()).unwrap();
         let mut zip = zip::ZipWriter::new(file);
-        zip.start_file("../evil.txt", zip::write::FileOptions::default()).unwrap();
+        zip.start_file("../evil.txt", zip::write::FileOptions::default())
+            .unwrap();
         use std::io::Write;
         zip.write_all(b"nope").unwrap();
         zip.finish().unwrap();

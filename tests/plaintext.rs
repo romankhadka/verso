@@ -1,4 +1,4 @@
-use verso::reader::{sanitize, plaintext};
+use verso::reader::{plaintext, sanitize};
 
 #[test]
 fn strips_scripts_and_iframes() {

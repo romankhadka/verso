@@ -9,10 +9,20 @@ pub fn write_export(dir: &Path, slug: &str, contents: &str) -> Result<std::path:
 }
 
 pub fn slug_from_title(title: &str) -> String {
-    title.chars().filter_map(|c| {
-        if c.is_alphanumeric() { Some(c.to_ascii_lowercase()) }
-        else if c.is_whitespace() || c == '-' || c == '_' { Some('-') }
-        else { None }
-    }).collect::<String>()
-     .split('-').filter(|s| !s.is_empty()).collect::<Vec<_>>().join("-")
+    title
+        .chars()
+        .filter_map(|c| {
+            if c.is_alphanumeric() {
+                Some(c.to_ascii_lowercase())
+            } else if c.is_whitespace() || c == '-' || c == '_' {
+                Some('-')
+            } else {
+                None
+            }
+        })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
 }

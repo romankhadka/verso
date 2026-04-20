@@ -1,14 +1,26 @@
 use rusqlite::{params, Connection};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AnchorStatus { Ok, Drifted, Lost }
+pub enum AnchorStatus {
+    Ok,
+    Drifted,
+    Lost,
+}
 
 impl AnchorStatus {
     pub fn as_str(self) -> &'static str {
-        match self { Self::Ok => "ok", Self::Drifted => "drifted", Self::Lost => "lost" }
+        match self {
+            Self::Ok => "ok",
+            Self::Drifted => "drifted",
+            Self::Lost => "lost",
+        }
     }
     pub fn parse(s: &str) -> Self {
-        match s { "drifted" => Self::Drifted, "lost" => Self::Lost, _ => Self::Ok }
+        match s {
+            "drifted" => Self::Drifted,
+            "lost" => Self::Lost,
+            _ => Self::Ok,
+        }
     }
 }
 
@@ -44,11 +56,22 @@ pub fn list(c: &Connection, book_id: i64) -> anyhow::Result<Vec<Highlight>> {
                 text, context_before, context_after, note, anchor_status
          FROM highlights WHERE book_id = ? ORDER BY spine_idx, char_offset_start",
     )?;
-    let rows: Vec<Highlight> = stmt.query_map(params![book_id], |r| Ok(Highlight {
-        id: r.get(0)?, book_id: r.get(1)?, spine_idx: r.get(2)?, chapter_title: r.get(3)?,
-        char_offset_start: r.get(4)?, char_offset_end: r.get(5)?, text: r.get(6)?,
-        context_before: r.get(7)?, context_after: r.get(8)?, note: r.get(9)?,
-        anchor_status: AnchorStatus::parse(&r.get::<_, String>(10)?),
-    }))?.collect::<Result<_,_>>()?;
+    let rows: Vec<Highlight> = stmt
+        .query_map(params![book_id], |r| {
+            Ok(Highlight {
+                id: r.get(0)?,
+                book_id: r.get(1)?,
+                spine_idx: r.get(2)?,
+                chapter_title: r.get(3)?,
+                char_offset_start: r.get(4)?,
+                char_offset_end: r.get(5)?,
+                text: r.get(6)?,
+                context_before: r.get(7)?,
+                context_after: r.get(8)?,
+                note: r.get(9)?,
+                anchor_status: AnchorStatus::parse(&r.get::<_, String>(10)?),
+            })
+        })?
+        .collect::<Result<_, _>>()?;
     Ok(rows)
 }

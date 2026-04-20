@@ -1,4 +1,7 @@
-use super::{keys::{parse_sequence, Key}, Action};
+use super::{
+    keys::{parse_sequence, Key},
+    Action,
+};
 use std::str::FromStr;
 
 #[derive(Debug, PartialEq)]
@@ -19,20 +22,31 @@ impl Keymap {
         let mut rules: Vec<(Vec<Key>, Action)> = Vec::new();
         for (action_str, seqs) in entries {
             let action = Action::from_str(action_str).map_err(|e| anyhow::anyhow!(e))?;
-            for s in seqs { rules.push((parse_sequence(s)?, action)); }
+            for s in seqs {
+                rules.push((parse_sequence(s)?, action));
+            }
         }
         // Prefix check: no sequence can be a strict prefix of another.
         for i in 0..rules.len() {
             for j in 0..rules.len() {
-                if i == j { continue; }
+                if i == j {
+                    continue;
+                }
                 let (a, _) = &rules[i];
                 let (b, _) = &rules[j];
                 if b.len() > a.len() && &b[..a.len()] == a.as_slice() {
-                    return Err(anyhow::anyhow!("keymap prefix collision: {:?} is a prefix of {:?}", a, b));
+                    return Err(anyhow::anyhow!(
+                        "keymap prefix collision: {:?} is a prefix of {:?}",
+                        a,
+                        b
+                    ));
                 }
             }
         }
-        Ok(Self { rules, buffer: std::cell::RefCell::new(Vec::new()) })
+        Ok(Self {
+            rules,
+            buffer: std::cell::RefCell::new(Vec::new()),
+        })
     }
 
     /// Feed one user keystroke. Returns what to do.

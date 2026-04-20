@@ -1,4 +1,8 @@
-use verso::store::{db::Db, books::{BookRow, upsert}, highlights::{insert, list, Highlight, AnchorStatus}};
+use verso::store::{
+    books::{upsert, BookRow},
+    db::Db,
+    highlights::{insert, list, AnchorStatus, Highlight},
+};
 
 fn fresh() -> (Db, i64) {
     let tmp = tempfile::NamedTempFile::new().unwrap();
@@ -13,10 +17,17 @@ fn fresh() -> (Db, i64) {
 fn inserts_and_lists_highlights() {
     let (db, bid) = fresh();
     let h = Highlight {
-        id: 0, book_id: bid, spine_idx: 1, chapter_title: Some("Ch.1".into()),
-        char_offset_start: 100, char_offset_end: 110,
-        text: "Hello hi".into(), context_before: Some("pre".into()), context_after: Some("post".into()),
-        note: None, anchor_status: AnchorStatus::Ok,
+        id: 0,
+        book_id: bid,
+        spine_idx: 1,
+        chapter_title: Some("Ch.1".into()),
+        char_offset_start: 100,
+        char_offset_end: 110,
+        text: "Hello hi".into(),
+        context_before: Some("pre".into()),
+        context_after: Some("post".into()),
+        note: None,
+        anchor_status: AnchorStatus::Ok,
     };
     insert(&mut db.conn().unwrap(), &h).unwrap();
     let all = list(&db.conn().unwrap(), bid).unwrap();

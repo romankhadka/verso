@@ -13,11 +13,15 @@ fn defaults_are_sensible() {
 #[test]
 fn user_overrides_apply() {
     let tmp = tempfile::NamedTempFile::new().unwrap();
-    std::fs::write(tmp.path(), r#"
+    std::fs::write(
+        tmp.path(),
+        r#"
 [reader]
 column_width = 80
 theme = "sepia"
-"#).unwrap();
+"#,
+    )
+    .unwrap();
     let cfg = load::from_path(tmp.path()).unwrap();
     assert_eq!(cfg.reader.column_width, 80);
     assert_eq!(cfg.reader.theme, "sepia");

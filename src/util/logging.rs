@@ -9,8 +9,7 @@ pub fn init(log_dir: &Path) -> anyhow::Result<WorkerGuard> {
     let appender = tracing_appender::rolling::daily(log_dir, "verso.log");
     let (nb, guard) = tracing_appender::non_blocking(appender);
 
-    let filter = EnvFilter::try_from_env("VERSO_LOG")
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = EnvFilter::try_from_env("VERSO_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
 
     tracing_subscriber::registry()
         .with(filter)

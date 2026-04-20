@@ -3,17 +3,34 @@ use std::str::FromStr;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Action {
     // Movement
-    MoveDown, MoveUp, PageDown, PageUp, HalfPageDown, HalfPageUp,
-    GotoTop, GotoBottom, NextChapter, PrevChapter,
+    MoveDown,
+    MoveUp,
+    PageDown,
+    PageUp,
+    HalfPageDown,
+    HalfPageUp,
+    GotoTop,
+    GotoBottom,
+    NextChapter,
+    PrevChapter,
     // Counts / commands
-    BeginCount(u8), BeginCmd, BeginSearchFwd, BeginSearchBack,
-    SearchNext, SearchPrev,
+    BeginCount(u8),
+    BeginCmd,
+    BeginSearchFwd,
+    BeginSearchBack,
+    SearchNext,
+    SearchPrev,
     // Marks
-    MarkSetPrompt, MarkJumpPrompt,
+    MarkSetPrompt,
+    MarkJumpPrompt,
     // Highlights
-    VisualSelect, YankHighlight, ListHighlights,
+    VisualSelect,
+    YankHighlight,
+    ListHighlights,
     // View
-    ToggleTheme, CycleWidth, Help,
+    ToggleTheme,
+    CycleWidth,
+    Help,
     // Quit
     QuitToLibrary,
 }

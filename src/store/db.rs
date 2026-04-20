@@ -9,10 +9,14 @@ pub struct Db {
 
 impl Db {
     pub fn open(path: &Path) -> anyhow::Result<Self> {
-        if let Some(parent) = path.parent() { std::fs::create_dir_all(parent)?; }
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         // Validate we can open.
         let _ = Self::new_conn(path)?;
-        Ok(Self { path: path.to_path_buf() })
+        Ok(Self {
+            path: path.to_path_buf(),
+        })
     }
 
     pub fn conn(&self) -> anyhow::Result<Connection> {
@@ -35,5 +39,7 @@ impl Db {
         super::migrate::run(&mut self.conn()?)
     }
 
-    pub fn location(&self) -> &std::path::Path { &self.path }
+    pub fn location(&self) -> &std::path::Path {
+        &self.path
+    }
 }

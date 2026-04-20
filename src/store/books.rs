@@ -1,20 +1,20 @@
-use rusqlite::{Connection, params, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension};
 
 #[derive(Debug, Clone)]
 pub struct BookRow {
-    pub stable_id:    Option<String>,
-    pub file_hash:    Option<String>,
-    pub title_norm:   String,
-    pub author_norm:  Option<String>,
-    pub path:         String,
-    pub title:        String,
-    pub author:       Option<String>,
-    pub language:     Option<String>,
-    pub publisher:    Option<String>,
+    pub stable_id: Option<String>,
+    pub file_hash: Option<String>,
+    pub title_norm: String,
+    pub author_norm: Option<String>,
+    pub path: String,
+    pub title: String,
+    pub author: Option<String>,
+    pub language: Option<String>,
+    pub publisher: Option<String>,
     pub published_at: Option<String>,
-    pub word_count:   Option<u64>,
-    pub page_count:   Option<u64>,
-    pub parse_error:  Option<String>,
+    pub word_count: Option<u64>,
+    pub page_count: Option<u64>,
+    pub parse_error: Option<String>,
 }
 
 impl BookRow {
@@ -29,8 +29,10 @@ impl BookRow {
             title: format!("Fixture {name}"),
             author: Some("Fixture Author".into()),
             language: Some("en".into()),
-            publisher: None, published_at: None,
-            word_count: Some(1000), page_count: Some(4),
+            publisher: None,
+            published_at: None,
+            word_count: Some(1000),
+            page_count: Some(4),
             parse_error: None,
         }
     }
@@ -45,16 +47,28 @@ pub enum IdentityMatch {
 
 pub fn resolve_identity(c: &Connection, row: &BookRow) -> anyhow::Result<Option<IdentityMatch>> {
     if let Some(sid) = &row.stable_id {
-        if let Some(id) = c.query_row(
-            "SELECT id FROM books WHERE stable_id = ? AND deleted_at IS NULL",
-            params![sid], |r| r.get::<_, i64>(0),
-        ).optional()? { return Ok(Some(IdentityMatch::ById(id))); }
+        if let Some(id) = c
+            .query_row(
+                "SELECT id FROM books WHERE stable_id = ? AND deleted_at IS NULL",
+                params![sid],
+                |r| r.get::<_, i64>(0),
+            )
+            .optional()?
+        {
+            return Ok(Some(IdentityMatch::ById(id)));
+        }
     }
     if let Some(fh) = &row.file_hash {
-        if let Some(id) = c.query_row(
-            "SELECT id FROM books WHERE file_hash = ? AND deleted_at IS NULL",
-            params![fh], |r| r.get::<_, i64>(0),
-        ).optional()? { return Ok(Some(IdentityMatch::ByHash(id))); }
+        if let Some(id) = c
+            .query_row(
+                "SELECT id FROM books WHERE file_hash = ? AND deleted_at IS NULL",
+                params![fh],
+                |r| r.get::<_, i64>(0),
+            )
+            .optional()?
+        {
+            return Ok(Some(IdentityMatch::ByHash(id)));
+        }
     }
     if let Some(a) = &row.author_norm {
         if let Some(id) = c.query_row(
@@ -80,9 +94,22 @@ pub fn upsert(c: &mut Connection, row: &BookRow) -> anyhow::Result<i64> {
                                    word_count = ?, page_count = ?, parse_error = ?,
                                    deleted_at = NULL
                  WHERE id = ?",
-                params![row.stable_id, row.file_hash, row.title_norm, row.author_norm,
-                        row.path, row.title, row.author, row.language, row.publisher,
-                        row.published_at, row.word_count, row.page_count, row.parse_error, id],
+                params![
+                    row.stable_id,
+                    row.file_hash,
+                    row.title_norm,
+                    row.author_norm,
+                    row.path,
+                    row.title,
+                    row.author,
+                    row.language,
+                    row.publisher,
+                    row.published_at,
+                    row.word_count,
+                    row.page_count,
+                    row.parse_error,
+                    id
+                ],
             )?;
             id
         }
@@ -92,9 +119,21 @@ pub fn upsert(c: &mut Connection, row: &BookRow) -> anyhow::Result<i64> {
                                     path, title, author, language, publisher, published_at,
                                     word_count, page_count, parse_error)
                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                params![row.stable_id, row.file_hash, row.title_norm, row.author_norm,
-                        row.path, row.title, row.author, row.language, row.publisher,
-                        row.published_at, row.word_count, row.page_count, row.parse_error],
+                params![
+                    row.stable_id,
+                    row.file_hash,
+                    row.title_norm,
+                    row.author_norm,
+                    row.path,
+                    row.title,
+                    row.author,
+                    row.language,
+                    row.publisher,
+                    row.published_at,
+                    row.word_count,
+                    row.page_count,
+                    row.parse_error
+                ],
             )?;
             tx.last_insert_rowid()
         }
