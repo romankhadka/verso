@@ -179,6 +179,26 @@ fn save_progress(app: &mut ReaderApp) {
     app.last_persist = Instant::now();
 }
 
+fn save_auto_bookmark(app: &mut ReaderApp) -> anyhow::Result<()> {
+    let Some(db) = app.db.as_ref() else {
+        return Ok(());
+    };
+    let Some(book_id) = app.book_id else {
+        return Ok(());
+    };
+    let co = current_char_offset(app);
+    let bm = Bookmark {
+        book_id,
+        mark: "\"".into(),
+        spine_idx: app.spine_idx,
+        char_offset: co,
+        anchor_hash: anchor::anchor_hash(&app.plain_text, co as usize),
+    };
+    let mut conn = db.conn()?;
+    bookmarks::set_bookmark(&mut conn, &bm)?;
+    Ok(())
+}
+
 fn current_char_offset(app: &ReaderApp) -> u64 {
     app.pages
         .get(app.page_idx)
@@ -315,6 +335,7 @@ fn event_loop(term: &mut Tui, app: &mut ReaderApp) -> Result<()> {
                         Mode::Visual { .. } => app.mode = Mode::Normal,
                         Mode::Normal => {
                             save_progress(app);
+                            save_auto_bookmark(app)?;
                             break;
                         }
                     },
