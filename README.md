@@ -24,15 +24,43 @@ lives in a folder on disk and a single SQLite file in `~/.local/share/verso/`.
 
 ## Install
 
+### From crates.io
+
 ```bash
-cargo install verso
+cargo install verso-reader
 ```
 
-Pre-built binaries for macOS (Intel + Apple Silicon) and Linux (musl,
-x86_64 + aarch64) are attached to GitHub Releases for every `v*` tag.
+The crate on crates.io is published as `verso-reader` (the `verso` name was
+already taken by an unrelated project). The installed binary is still called
+`verso` — so `cargo install verso-reader` and then running `verso` is the
+whole flow.
 
-Requirements: a terminal that handles UTF-8 (any modern terminal — verso does
-not require Kitty or Sixel in v1; it intentionally renders text only).
+### Pre-built binaries
+
+Every `v*` tag attaches binaries for macOS (Intel + Apple Silicon) and Linux
+(musl, x86_64 + aarch64) to the [latest GitHub
+Release](https://github.com/romankhadka/verso/releases). Download, extract,
+and drop `verso` somewhere on your `PATH`:
+
+```bash
+# macOS (Apple Silicon) example:
+curl -L https://github.com/romankhadka/verso/releases/latest/download/verso-v0.1.0-aarch64-apple-darwin.tar.gz \
+  | tar xz
+mv verso ~/.local/bin/   # or anywhere on your PATH
+```
+
+### From source
+
+```bash
+git clone https://github.com/romankhadka/verso
+cd verso
+cargo install --path .
+```
+
+### Requirements
+
+A terminal that handles UTF-8. Any modern terminal works — verso does not
+require Kitty or Sixel in v1; it intentionally renders text only.
 
 ---
 
