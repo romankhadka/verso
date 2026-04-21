@@ -14,6 +14,7 @@ use crate::{
     store::{
         bookmarks::{self, Bookmark},
         db::Db,
+        progress::{self, ProgressRow},
     },
     ui::{
         chrome::{Chrome, ChromeState},
@@ -54,11 +55,15 @@ pub struct ReaderApp {
     pub mode: Mode,
     pending_mark: Option<MarkMode>,
     plain_text: String,
+    plain_text_chars: usize,
+    last_persist: Instant,
     search_buffer: String,
     search_mode: Option<SearchDirection>,
     search_matches: Vec<usize>,
     search_cursor: usize,
 }
+
+const PROGRESS_PERSIST_INTERVAL: Duration = Duration::from_secs(5);
 
 pub fn run_with_html(html: &str, title: &str) -> Result<()> {
     run_with_html_and_db(html, title, None, None, 0)
@@ -85,6 +90,8 @@ pub fn run_with_html_and_db(
     let pages = page::paginate(&spans, col, size.height.saturating_sub(2));
     let keymap = Keymap::from_config(&defaults::default_entries())?;
 
+    let plain_text_chars = plain_text.chars().count();
+
     let mut app = ReaderApp {
         pages,
         page_idx: 0,
@@ -100,15 +107,76 @@ pub fn run_with_html_and_db(
         mode: Mode::Normal,
         pending_mark: None,
         plain_text,
+        plain_text_chars,
+        last_persist: Instant::now(),
         search_buffer: String::new(),
         search_mode: None,
         search_matches: Vec::new(),
         search_cursor: 0,
     };
 
+    restore_progress(&mut app);
+
     let res = event_loop(&mut term, &mut app);
     terminal::leave(&mut term)?;
     res
+}
+
+/// Restore `page_idx` from the persisted progress row, if one exists.
+/// Finds the page whose first row's `char_offset` is the closest value
+/// not exceeding `row.char_offset`.
+fn restore_progress(app: &mut ReaderApp) {
+    let (Some(db), Some(book_id)) = (app.db.as_ref(), app.book_id) else {
+        return;
+    };
+    let Ok(conn) = db.conn() else {
+        return;
+    };
+    let Ok(Some(row)) = progress::load(&conn, book_id) else {
+        return;
+    };
+    let target = row.char_offset as usize;
+    let mut best: Option<usize> = None;
+    for (idx, page) in app.pages.iter().enumerate() {
+        let Some(first) = page.rows.first() else {
+            continue;
+        };
+        if first.char_offset <= target {
+            best = Some(idx);
+        } else {
+            break;
+        }
+    }
+    if let Some(idx) = best {
+        app.page_idx = idx;
+    }
+}
+
+fn save_progress(app: &mut ReaderApp) {
+    let (Some(db), Some(book_id)) = (app.db.as_ref(), app.book_id) else {
+        return;
+    };
+    let Ok(mut conn) = db.conn() else {
+        return;
+    };
+    let char_offset = current_char_offset(app);
+    let percent = if app.plain_text_chars == 0 {
+        0.0
+    } else {
+        (char_offset as f32 / app.plain_text_chars as f32 * 100.0).clamp(0.0, 100.0)
+    };
+    let anchor_hash = anchor::anchor_hash(&app.plain_text, char_offset as usize);
+    let row = ProgressRow {
+        book_id,
+        spine_idx: app.spine_idx,
+        char_offset,
+        anchor_hash,
+        percent,
+        time_read_s: 0,
+        words_read: 0,
+    };
+    let _ = progress::upsert(&mut conn, &row);
+    app.last_persist = Instant::now();
 }
 
 fn current_char_offset(app: &ReaderApp) -> u64 {
@@ -131,6 +199,9 @@ fn seek_to_offset(app: &mut ReaderApp, target: usize) {
 fn event_loop(term: &mut Tui, app: &mut ReaderApp) -> Result<()> {
     loop {
         let now = Instant::now();
+        if now.duration_since(app.last_persist) >= PROGRESS_PERSIST_INTERVAL {
+            save_progress(app);
+        }
         term.draw(|f| {
             let area = f.size();
             let _show_chrome = matches!(app.chrome.state(now), ChromeState::Visible);
@@ -242,7 +313,10 @@ fn event_loop(term: &mut Tui, app: &mut ReaderApp) -> Result<()> {
                     }
                     Dispatch::Fire(Action::QuitToLibrary) => match app.mode {
                         Mode::Visual { .. } => app.mode = Mode::Normal,
-                        Mode::Normal => break,
+                        Mode::Normal => {
+                            save_progress(app);
+                            break;
+                        }
                     },
                     Dispatch::Fire(Action::VisualSelect) => {
                         let off = current_char_offset(app) as usize;

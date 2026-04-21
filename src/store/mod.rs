@@ -4,3 +4,4 @@ pub mod db;
 pub mod highlights;
 pub mod library_view;
 pub mod migrate;
+pub mod progress;
