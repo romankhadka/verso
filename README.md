@@ -4,7 +4,7 @@ A terminal EPUB reader with vim navigation, a Kindle-style library, and
 first-class Markdown highlight export to Obsidian / Logseq / Zotero.
 
 > **Status:** v1 (EPUB only). PDF, MOBI, covers, and sync arrive in later
-> releases — see `docs/superpowers/specs/2026-04-20-verso-design.md`.
+> releases — see the Roadmap section below.
 
 ---
 
@@ -297,10 +297,6 @@ Pull requests welcome. CI runs `cargo fmt --all -- --check`,
 `cargo clippy --all-targets -- -D warnings`, and `cargo test --all` on
 ubuntu and macos. Please keep both gates green and add tests for
 behavioural changes.
-
-The design spec is at `docs/superpowers/specs/2026-04-20-verso-design.md`
-and the implementation plan at
-`docs/superpowers/plans/2026-04-20-verso-v1-implementation.md`.
 
 ## Licence
 

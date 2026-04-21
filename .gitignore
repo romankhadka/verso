@@ -1,2 +1,25 @@
+# Internal working docs, specs, plans, brainstorms — not for public repo
+.internal/
 .superpowers/
+
+# Rust build artefacts
 target/
+Cargo.lock.bak
+
+# Editor / OS cruft
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/
+*.iml
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Verso runtime data leaking into the repo (shouldn't happen, but defensive)
+verso.db
+verso.db-*
+*.log
