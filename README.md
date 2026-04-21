@@ -90,8 +90,10 @@ restart.
 
 ### 2. Reading a book
 
-Press `enter` on a row. The reader opens with auto-hiding chrome (a thin
-status line at the bottom). Move with familiar vim motions:
+Press `enter` on a row. The reader opens on the first chapter with
+auto-hiding chrome (a thin status line at the bottom). The full book is
+available — `]]` and `[[` step through spine items and the `:toc` command
+opens a jump-anywhere modal. Move with familiar vim motions:
 
 | Key                          | Action                                |
 | ---------------------------- | ------------------------------------- |
@@ -101,10 +103,11 @@ status line at the bottom). Move with familiar vim motions:
 | `b` / `<C-b>`                | Page up                               |
 | `d` / `<C-d>`                | Half page down                        |
 | `u` / `<C-u>`                | Half page up                          |
-| `gg`                         | Jump to the first page                |
-| `G`                          | Jump to the last page                 |
+| `gg`                         | Jump to the first page of the chapter |
+| `G`                          | Jump to the last page of the chapter  |
 | `]]` / `[[`                  | Next / previous chapter               |
 | `gt`                         | Cycle theme: dark → sepia → light     |
+| `:`                          | Open the command prompt (see below)   |
 | `q`                          | Quit back to the library              |
 
 The chrome fades after 3 seconds of no input. Any keypress brings it back.
@@ -147,9 +150,29 @@ location.
 
 `<Esc>` or another `v` exits visual mode without yanking.
 
-### 6. Exporting highlights to Markdown
+### 6. The command prompt (`:`, `:toc`, `:hl`, `:export`, `:w`, `:q`)
 
-Two ways:
+Press `:` to open a single-line command prompt at the bottom. Type a
+command name, press `<Enter>`, and `<Esc>` cancels.
+
+| Command   | Action                                                      |
+| --------- | ----------------------------------------------------------- |
+| `:toc`    | Jump-anywhere: floating list of every chapter in the spine. |
+| `:hl`     | Highlights panel for the current book (jump / delete).      |
+| `:export` | Write `~/Books/highlights/<slug>.md` for the current book.  |
+| `:w`      | Force an immediate progress write (bypasses the 5s debounce).|
+| `:q`      | Quit back to the library (same as `q` in Normal mode).      |
+
+In the `:toc` modal: `j`/`k` (or `↑`/`↓`) move, `<Enter>` jumps, `q`/`<Esc>`
+closes. In `:hl`: same movement; `<Enter>` jumps to the highlighted passage
+(loads the right chapter and seeks to the character offset), `d` deletes
+the selected highlight, `q`/`<Esc>` closes. Inline note editing arrives in
+v1.1.
+
+### 7. Exporting highlights to Markdown
+
+Either `:export` inside the reader (shows a toast with the written path)
+or the CLI subcommand:
 
 ```bash
 verso export ~/Books/dune.epub
@@ -182,7 +205,7 @@ Drifted highlights are tagged ` *(drifted)*`; lost ones get ` *(lost)*`.
 Re-running `verso export` overwrites the file (the SQLite DB is the
 source of truth, the Markdown is a projection).
 
-### 7. Other CLI subcommands
+### 8. Other CLI subcommands
 
 ```bash
 verso scan            # rescan the library folder explicitly (rare; the app does this on launch)
@@ -271,7 +294,8 @@ highlights still keep their captured text — you don't lose the note.
 The full action catalog with default bindings, key-sequence grammar, and
 rebinding examples lives in [`docs/keymap.md`](docs/keymap.md).
 
-A short summary: `j k gg G ]] [[ / ? n N v y ma 'a gt z= q`.
+A short summary: `j k gg G ]] [[ / ? n N v y ma 'a gt z= : q`, plus
+`:toc`, `:hl`, `:export`, `:w`, `:q` at the command prompt.
 
 ---
 
