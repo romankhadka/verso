@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 /// Default key bindings for the reader, as (action, sequences) pairs.
 pub fn default_entries() -> Vec<(String, Vec<String>)> {
     vec![
@@ -29,4 +31,20 @@ pub fn default_entries() -> Vec<(String, Vec<String>)> {
         ("cycle_width".into(), vec!["z=".into()]),
         ("help".into(), vec!["<F1>".into()]),
     ]
+}
+
+/// Merge user keymap overrides on top of defaults.
+/// If `user` contains an action, it REPLACES the default bindings for that action.
+/// Unknown actions are still passed through so `Keymap::from_config` can surface
+/// a clear error rather than silently ignoring user input.
+pub fn merge_with_user(user: &BTreeMap<String, Vec<String>>) -> Vec<(String, Vec<String>)> {
+    let mut out: Vec<(String, Vec<String>)> = default_entries();
+    for (action, seqs) in user {
+        if let Some(entry) = out.iter_mut().find(|(a, _)| a == action) {
+            entry.1 = seqs.clone();
+        } else {
+            out.push((action.clone(), seqs.clone()));
+        }
+    }
+    out
 }

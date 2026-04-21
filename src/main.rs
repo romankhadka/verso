@@ -29,7 +29,7 @@ fn main() -> Result<()> {
                 .ok_or_else(|| anyhow::anyhow!("manifest missing idref {}", idref))?;
             let html = book.read_file(manifest_item.value())?;
             let title = epub_meta::extract(&path)?.title;
-            reader_app::run_with_html(&html, &title)?;
+            reader_app::run_with_html_and_db(&html, &title, None, None, 0, Some(&cfg.keymap))?;
         }
         Some(Command::Export { target }) => {
             let db = verso::store::db::Db::open(&paths.db_file())?;
@@ -135,7 +135,7 @@ fn main() -> Result<()> {
                 report.inserted,
                 report.errors.len()
             );
-            verso::ui::library_app::run(&db, &library_path)?;
+            verso::ui::library_app::run(&db, &library_path, &cfg.keymap)?;
         }
     }
     Ok(())

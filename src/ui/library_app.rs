@@ -17,9 +17,14 @@ use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::layout::Rect;
 use rbook::Ebook;
+use std::collections::BTreeMap;
 use std::time::Duration;
 
-pub fn run(db: &Db, library_path: &std::path::Path) -> Result<()> {
+pub fn run(
+    db: &Db,
+    library_path: &std::path::Path,
+    keymap_overrides: &BTreeMap<String, Vec<String>>,
+) -> Result<()> {
     let (watch_rx, _watcher_handle) = watch::spawn_watcher(library_path)?;
 
     let mut term = terminal::enter()?;
@@ -35,6 +40,7 @@ pub fn run(db: &Db, library_path: &std::path::Path) -> Result<()> {
         &mut sort,
         &mut filter,
         &watch_rx,
+        keymap_overrides,
     );
     terminal::leave(&mut term)?;
     res
@@ -101,6 +107,7 @@ fn build_details_text(row: &Row, d: &Details) -> String {
     lines.join("\n")
 }
 
+#[allow(clippy::too_many_arguments)]
 fn loop_body(
     term: &mut Tui,
     db: &Db,
@@ -109,6 +116,7 @@ fn loop_body(
     sort: &mut Sort,
     filter: &mut Filter,
     watch_rx: &crossbeam_channel::Receiver<LibraryEvent>,
+    keymap_overrides: &BTreeMap<String, Vec<String>>,
 ) -> Result<()> {
     let mut details_open = false;
     loop {
@@ -209,6 +217,7 @@ fn loop_body(
                                     Some(reader_db),
                                     Some(row.book_id),
                                     0,
+                                    Some(keymap_overrides),
                                 )?;
                                 *term = terminal::enter()?;
                             }

@@ -66,7 +66,7 @@ pub struct ReaderApp {
 const PROGRESS_PERSIST_INTERVAL: Duration = Duration::from_secs(5);
 
 pub fn run_with_html(html: &str, title: &str) -> Result<()> {
-    run_with_html_and_db(html, title, None, None, 0)
+    run_with_html_and_db(html, title, None, None, 0, None)
 }
 
 pub fn run_with_html_and_db(
@@ -75,6 +75,7 @@ pub fn run_with_html_and_db(
     db: Option<Db>,
     book_id: Option<i64>,
     spine_idx: u32,
+    keymap_overrides: Option<&std::collections::BTreeMap<String, Vec<String>>>,
 ) -> Result<()> {
     let safe = sanitize::clean(html);
     let spans = styled::to_spans(&safe);
@@ -88,7 +89,11 @@ pub fn run_with_html_and_db(
     let size = term.size()?;
     let col = 68u16.min(size.width);
     let pages = page::paginate(&spans, col, size.height.saturating_sub(2));
-    let keymap = Keymap::from_config(&defaults::default_entries())?;
+    let entries = match keymap_overrides {
+        Some(user) => defaults::merge_with_user(user),
+        None => defaults::default_entries(),
+    };
+    let keymap = Keymap::from_config(&entries)?;
 
     let plain_text_chars = plain_text.chars().count();
 
