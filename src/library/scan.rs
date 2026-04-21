@@ -1,7 +1,7 @@
 use crate::{
-    library::{epub_guard, epub_meta, hashing, normalise},
+    library::{epub_guard, epub_meta, hashing, normalise, reanchor},
     store::{
-        books::{upsert, BookRow},
+        books::{resolve_identity, upsert, BookRow, IdentityMatch},
         db::Db,
     },
 };
@@ -57,8 +57,33 @@ pub fn scan_folder(dir: &Path, db: &Db) -> anyhow::Result<ScanReport> {
             page_count: meta.word_count.map(|w| (w / 275).max(1)),
             parse_error: None,
         };
+        // Detect pre-upsert hash state so we can trigger a highlight reanchor if
+        // a re-imported edition's bytes have changed under an existing identity.
+        let pre_hash: Option<String> = match resolve_identity(&conn, &row)? {
+            Some(
+                IdentityMatch::ById(id) | IdentityMatch::ByHash(id) | IdentityMatch::ByNorm(id),
+            ) => conn
+                .query_row(
+                    "SELECT file_hash FROM books WHERE id = ?",
+                    rusqlite::params![id],
+                    |r| r.get::<_, Option<String>>(0),
+                )
+                .ok()
+                .flatten(),
+            None => None,
+        };
+
         // For v1 we just count all as "inserted"; refine later.
-        let _id = upsert(&mut conn, &row)?;
+        let book_id = upsert(&mut conn, &row)?;
+
+        // If the row existed previously with a different hash, re-run anchor
+        // resolution so highlights don't silently drift/go lost.
+        if let (Some(pre), Some(post)) = (pre_hash, row.file_hash.as_ref()) {
+            if pre != *post {
+                let _ = reanchor::reanchor_book(db, book_id, &path);
+            }
+        }
+
         report.inserted += 1;
     }
 
