@@ -25,14 +25,18 @@ pub fn scan_folder(dir: &Path, db: &Db) -> anyhow::Result<ScanReport> {
         }
 
         if let Err(e) = epub_guard::validate_archive(&path, epub_guard::Limits::default()) {
-            report.errors.push((path.clone(), e.to_string()));
+            let err_string = e.to_string();
+            record_broken(&mut conn, &path, &err_string);
+            report.errors.push((path.clone(), err_string));
             continue;
         }
 
         let meta = match epub_meta::extract(&path) {
             Ok(m) => m,
             Err(e) => {
-                report.errors.push((path.clone(), e.to_string()));
+                let err_string = e.to_string();
+                record_broken(&mut conn, &path, &err_string);
+                report.errors.push((path.clone(), err_string));
                 continue;
             }
         };
@@ -77,6 +81,33 @@ pub fn scan_folder(dir: &Path, db: &Db) -> anyhow::Result<ScanReport> {
     }
 
     Ok(report)
+}
+
+/// Upsert a minimal row marking this file as unparseable so it appears under
+/// the "broken" library filter. Best-effort: a DB error here must not tank the
+/// whole scan, so we discard the result.
+fn record_broken(conn: &mut rusqlite::Connection, path: &Path, err_string: &str) {
+    let title = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown.epub")
+        .to_string();
+    let row = BookRow {
+        stable_id: None,
+        file_hash: hashing::sha256_file(path).ok(),
+        title_norm: normalise::normalise_text(&title),
+        author_norm: None,
+        path: path.to_string_lossy().to_string(),
+        title,
+        author: None,
+        language: None,
+        publisher: None,
+        published_at: None,
+        word_count: None,
+        page_count: None,
+        parse_error: Some(err_string.to_string()),
+    };
+    let _ = upsert(conn, &row);
 }
 
 fn walkdir(dir: &Path) -> Vec<std::path::PathBuf> {
