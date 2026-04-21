@@ -2,9 +2,14 @@ name: release
 on:
   push:
     tags: ["v*"]
+
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - { os: macos-latest,   target: x86_64-apple-darwin }
@@ -14,11 +19,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with: { targets: ${{ matrix.target }} }
-      - if: contains(matrix.target, 'musl')
-        run: sudo apt-get install -y musl-tools
-      - run: cargo build --release --target ${{ matrix.target }}
-      - uses: softprops/action-gh-release@v2
+      - uses: taiki-e/upload-rust-binary-action@v1
         with:
-          files: target/${{ matrix.target }}/release/verso*
+          bin: verso
+          target: ${{ matrix.target }}
+          archive: verso-$tag-$target
+          token: ${{ secrets.GITHUB_TOKEN }}
