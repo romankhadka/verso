@@ -50,6 +50,11 @@ pub fn insert(c: &mut Connection, h: &Highlight) -> anyhow::Result<i64> {
     Ok(c.last_insert_rowid())
 }
 
+pub fn delete(c: &mut Connection, id: i64) -> anyhow::Result<()> {
+    c.execute("DELETE FROM highlights WHERE id = ?", params![id])?;
+    Ok(())
+}
+
 pub fn list(c: &Connection, book_id: i64) -> anyhow::Result<Vec<Highlight>> {
     let mut stmt = c.prepare(
         "SELECT id, book_id, spine_idx, chapter_title, char_offset_start, char_offset_end,

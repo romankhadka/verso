@@ -16,7 +16,6 @@ use crate::{
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::layout::Rect;
-use rbook::Ebook;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -199,24 +198,12 @@ fn loop_body(
                                     |r| r.get(0),
                                 )?;
                                 terminal::leave(term)?;
-                                let book = rbook::Epub::new(std::path::Path::new(&path))?;
-                                let spine = book.spine().elements();
-                                let first = spine
-                                    .first()
-                                    .ok_or_else(|| anyhow::anyhow!("empty spine"))?;
-                                let idref = first.name();
-                                let manifest_item =
-                                    book.manifest().by_id(idref).ok_or_else(|| {
-                                        anyhow::anyhow!("manifest missing idref {}", idref)
-                                    })?;
-                                let html = book.read_file(manifest_item.value())?;
                                 let reader_db = Db::open(db.location())?;
-                                reader_app::run_with_html_and_db(
-                                    &html,
+                                reader_app::run_with_epub_and_db(
+                                    std::path::Path::new(&path),
                                     &row.title,
                                     Some(reader_db),
                                     Some(row.book_id),
-                                    0,
                                     Some(keymap_overrides),
                                 )?;
                                 *term = terminal::enter()?;

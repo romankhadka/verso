@@ -1,4 +1,5 @@
 pub mod anchor;
+pub mod book;
 pub mod cache;
 pub mod linebreak;
 pub mod page;
