@@ -8,6 +8,33 @@ first-class Markdown highlight export to Obsidian / Logseq / Zotero.
 
 ---
 
+## Screenshots
+
+<!--
+Add an asciinema cast or PNG here. The placeholder below renders correctly
+on GitHub and can be replaced with a real recording without touching the
+surrounding markup.
+
+Suggested cast: launch `verso`, sort the library, open a book, navigate
+chapters with `]]`/`[[`, take a highlight with `v` + motion + `y`, run
+`:export`, exit.
+
+To record:
+
+  asciinema rec --idle-time-limit=2 docs/cast.cast
+  # then upload to asciinema.org and replace the link below, OR
+  agg docs/cast.cast docs/cast.gif    # render to a GIF for inline embed
+-->
+
+<p align="center">
+  <em>(asciinema cast coming soon — see <a href="docs/cast.cast">docs/cast.cast</a>)</em>
+</p>
+
+A static preview of the library and reader views appears in the **Usage
+guide** below.
+
+---
+
 ## Why verso?
 
 Existing terminal e-readers (epy, bk, baca, bookokrat) are either stale,
