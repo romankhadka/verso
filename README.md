@@ -51,6 +51,12 @@ lives in a folder on disk and a single SQLite file in `~/.local/share/verso/`.
 
 ## Install
 
+### Homebrew (macOS / Linux)
+
+```bash
+brew install romankhadka/tap/verso
+```
+
 ### From crates.io
 
 ```bash
