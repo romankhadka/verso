@@ -1,0 +1,1414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>verso — read like you edit</title>
+<meta name="description" content="A terminal EPUB reader with vim motions, a Kindle-style library, and highlights that land in your vault as Markdown. One static binary. No network, no telemetry, no daemon." />
+<meta name="color-scheme" content="light dark" />
+<link rel="canonical" href="https://verso.romn.dev/" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://verso.romn.dev/" />
+<meta property="og:title" content="verso — read like you edit" />
+<meta property="og:description" content="A terminal EPUB reader with vim motions, a Kindle-style library, and highlights that land in your vault as Markdown." />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23120F0C'/%3E%3Crect x='5' y='7' width='10' height='18' rx='1.6' fill='%23E0894B'/%3E%3Crect x='17.6' y='7' width='10' height='18' rx='1.6' fill='none' stroke='%23E0894B' stroke-width='1.6' opacity='.55'/%3E%3C/svg%3E" />
+
+<style>
+/* ══════════════════════════════════════════════════════════════
+   verso — landing page
+
+   A reader deserves a page that is itself well set. The type is a
+   serif at a book measure, the palette is paper and ink rather
+   than the usual console black, and the demo below the fold is a
+   working model of the TUI: the same keys, the same status line,
+   the same Markdown the exporter writes.
+   ══════════════════════════════════════════════════════════════ */
+
+:root {
+  color-scheme: light dark;
+
+  /* paper */
+  --paper:      #FAF6EC;
+  --paper-2:    #F2EBDC;
+  --card:       #FFFDF7;
+  --ink:        #211E18;
+  --ink-2:      #5A5346;
+  --ink-3:      #8B8271;
+  --rule:       rgba(33, 30, 24, 0.13);
+  --rule-2:     rgba(33, 30, 24, 0.26);
+  --accent:     #A4461A;
+  --accent-2:   #7C3211;
+  --accent-soft: rgba(164, 70, 26, 0.09);
+  --shadow:     0 1px 2px rgba(60, 48, 30, .06), 0 8px 28px -12px rgba(60, 48, 30, .22);
+
+  /* the terminal, dark theme — Color::Reset bg, Color::Gray fg */
+  --term-bg:    #14120F;
+  --term-fg:    #B4AEA3;
+  --term-dim:   #6E6759;
+  --term-chrome:#0D0B09;
+  --term-sel:   rgba(224, 137, 75, 0.26);
+  --term-sel-fg:#F6E7D6;
+  --term-hit:   rgba(224, 137, 75, 0.5);
+  --term-edge:  rgba(255, 250, 240, 0.10);
+
+  --serif: ui-serif, "New York", "Iowan Old Style", Charter, "Palatino Linotype", Palatino, Georgia, serif;
+  --sans:  -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, system-ui, sans-serif;
+  --mono:  ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+
+  --measure: 33rem;
+  --gutter: clamp(1.15rem, 4.5vw, 3.25rem);
+  --ease: cubic-bezier(.2, .8, .3, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper:      #100E0B;
+    --paper-2:    #171410;
+    --card:       #1A1611;
+    --ink:        #F0E9DB;
+    --ink-2:      #A79E8C;
+    --ink-3:      #786F5F;
+    --rule:       rgba(240, 233, 219, 0.13);
+    --rule-2:     rgba(240, 233, 219, 0.26);
+    --accent:     #E0894B;
+    --accent-2:   #EFA269;
+    --accent-soft: rgba(224, 137, 75, 0.13);
+    --shadow:     0 1px 2px rgba(0,0,0,.4), 0 12px 34px -14px rgba(0,0,0,.7);
+    --term-bg:    #0B0A08;
+    --term-chrome:#070605;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  margin: 0;
+  background-color: var(--paper);
+  /* a faint tooth to the paper — invisible until you look for it */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.032'/%3E%3C/svg%3E");
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-variant-numeric: oldstyle-nums proportional-nums;
+}
+
+h1, h2, h3, h4 { margin: 0; font-weight: 600; text-wrap: balance; letter-spacing: -0.021em; }
+p { margin: 0; text-wrap: pretty; }
+a { color: inherit; text-underline-offset: 0.18em; }
+img, svg { display: block; }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+
+.skip {
+  position: fixed; top: 0; left: 0; z-index: 99;
+  transform: translateY(-120%);
+  background: var(--accent); color: #fff; padding: .7rem 1rem; border-radius: 0 0 .5rem 0;
+  font-family: var(--sans); font-size: .9rem; text-decoration: none;
+}
+.skip:focus { transform: translateY(0); }
+
+.shell { max-width: 72rem; margin-inline: auto; padding-inline: var(--gutter); }
+.narrow { max-width: 46rem; }
+
+.eyebrow {
+  font-family: var(--sans);
+  font-size: .7rem; font-weight: 600;
+  letter-spacing: .15em; text-transform: uppercase;
+  color: var(--accent);
+  font-variant-numeric: normal;
+}
+
+/* ── masthead ───────────────────────────────────────────────── */
+
+.masthead {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; padding-block: 1.4rem;
+}
+.wordmark {
+  display: inline-flex; align-items: center; gap: .6rem;
+  font-size: 1.22rem; font-weight: 600; letter-spacing: -.03em;
+  text-decoration: none;
+}
+.wordmark svg { width: 1.45rem; height: 1.45rem; }
+.masthead nav { display: flex; gap: 1.6rem; font-family: var(--sans); font-size: .875rem; color: var(--ink-2); }
+.masthead nav a { text-decoration: none; }
+.masthead nav a:hover { color: var(--accent); }
+@media (max-width: 46rem) { .masthead nav { display: none; } }
+
+/* ── hero ───────────────────────────────────────────────────── */
+
+.hero { padding-block: clamp(2.5rem, 8vw, 5rem) clamp(1.5rem, 4vw, 2.75rem); }
+/* verso and recto: the pitch on the left-hand page, the book on the right */
+.spread { display: grid; gap: clamp(2.5rem, 5vw, 4rem); align-items: center; }
+.spread > * { min-width: 0; }
+@media (min-width: 68rem) { .spread { grid-template-columns: minmax(0, 1fr) minmax(0, 25rem); } }
+@media (max-width: 67.99rem) { .recto { display: none; } }
+
+.recto {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 2px .7rem .7rem 2px;
+  padding: 2.5rem 2.3rem 3.2rem;
+  font-size: .93rem; line-height: 1.78; color: var(--ink);
+  box-shadow: 0 1px 2px rgba(60,48,30,.05), 0 22px 50px -26px rgba(60,48,30,.35);
+}
+/* the stack of leaves underneath */
+.recto::before {
+  content: ""; position: absolute; inset: .55rem -.5rem -.55rem .35rem;
+  background: var(--card); border: 1px solid var(--rule);
+  border-radius: 2px .7rem .7rem 2px; z-index: -1; opacity: .55;
+}
+/* the gutter, where the page meets the binding */
+.recto::after {
+  content: ""; position: absolute; inset: 0 auto 0 0; width: 1.5rem;
+  background: linear-gradient(90deg, rgba(60,48,30,.13), transparent);
+  border-radius: 2px 0 0 2px; pointer-events: none;
+}
+.recto .runhead {
+  display: flex; justify-content: space-between; gap: 1rem;
+  font-family: var(--sans); font-size: .62rem; font-weight: 600;
+  letter-spacing: .19em; text-transform: uppercase; color: var(--ink-3);
+  padding-bottom: .8rem; margin-bottom: 1.3rem;
+  border-bottom: 1px solid var(--rule);
+}
+.recto p + p { margin-top: .8rem; text-indent: 1.3em; }
+.recto p:first-of-type::first-letter {
+  float: left; font-size: 3.05em; line-height: .84;
+  padding: .06em .045em 0 0; color: var(--accent); font-weight: 600;
+}
+.recto .folio {
+  position: absolute; bottom: 1.35rem; right: 2.3rem;
+  font-family: var(--mono); font-size: .7rem; color: var(--ink-3);
+  font-variant-numeric: normal;
+}
+.hero h1 {
+  font-size: clamp(3rem, 10.5vw, 6.6rem);
+  line-height: .95; letter-spacing: -.045em;
+  max-width: 11ch; margin-block: 1.1rem .1rem;
+}
+.hero h1 em { font-style: italic; color: var(--accent); }
+.hero-lede {
+  font-size: clamp(1.12rem, 2.2vw, 1.32rem);
+  color: var(--ink-2); max-width: var(--measure);
+  margin-top: 1.5rem; line-height: 1.55;
+}
+.hero-lede strong { color: var(--ink); font-weight: 600; }
+
+.hero-actions { display: flex; flex-wrap: wrap; gap: .7rem; align-items: center; margin-top: 2rem; }
+.button {
+  display: inline-flex; align-items: center; gap: .45rem;
+  font-family: var(--sans); font-size: .92rem; font-weight: 550;
+  padding: .68rem 1.15rem; border-radius: .6rem;
+  text-decoration: none; border: 1px solid transparent; cursor: pointer;
+  transition: background-color .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease);
+}
+.button-primary { background: var(--accent); color: #FFF8F0; }
+.button-primary:hover { background: var(--accent-2); }
+.button-quiet { border-color: var(--rule-2); color: var(--ink); }
+.button-quiet:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+/* the install line, copyable */
+.cmd {
+  display: inline-flex; align-items: center; gap: .8rem;
+  margin-top: 1.6rem; padding: .55rem .55rem .55rem .95rem;
+  border: 1px solid var(--rule); border-radius: .6rem;
+  background: var(--card); box-shadow: var(--shadow);
+  font-family: var(--mono); font-size: .875rem;
+  max-width: 100%; overflow: hidden;
+}
+.cmd code { white-space: nowrap; overflow-x: auto; min-width: 0; flex: 1 1 auto; }
+.cmd .sigil { color: var(--ink-3); user-select: none; }
+.copy {
+  flex: 0 0 auto; border: 1px solid var(--rule); background: var(--paper-2);
+  color: var(--ink-2); font-family: var(--sans); font-size: .74rem; font-weight: 600;
+  letter-spacing: .05em; text-transform: uppercase;
+  padding: .38rem .6rem; border-radius: .4rem; cursor: pointer;
+  transition: color .15s var(--ease), border-color .15s var(--ease);
+}
+.copy:hover { color: var(--accent); border-color: var(--accent); }
+.copy[data-done="1"] { color: var(--accent); border-color: var(--accent); }
+
+/* ── the demo ───────────────────────────────────────────────── */
+
+.demo-wrap { padding-bottom: clamp(3rem, 7vw, 5rem); }
+
+.term {
+  max-width: 56rem; margin-inline: auto;
+  border-radius: .85rem; overflow: hidden;
+  border: 1px solid var(--rule);
+  background: var(--term-bg);
+  box-shadow: 0 2px 4px rgba(40,30,15,.08), 0 26px 60px -26px rgba(40,30,15,.45);
+  position: relative;
+}
+.term:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.term[data-focused="1"] { box-shadow: 0 2px 4px rgba(40,30,15,.08), 0 26px 60px -26px rgba(40,30,15,.45), 0 0 0 2px var(--accent); }
+
+.term-bar {
+  display: flex; align-items: center; gap: .65rem;
+  padding: .6rem .85rem; background: var(--term-chrome);
+  border-bottom: 1px solid var(--term-edge);
+}
+.term-bar i { width: .6rem; height: .6rem; border-radius: 50%; background: rgba(255,250,240,.16); display: block; }
+.term-bar .who {
+  margin-inline: auto; font-family: var(--mono); font-size: .74rem;
+  color: var(--term-dim); letter-spacing: .02em;
+}
+
+.screen {
+  position: relative;
+  font-family: var(--mono);
+  font-size: clamp(11px, 1.5vw, 16px);
+  line-height: 1.58;
+  color: var(--term-fg);
+  padding: 1.25rem 1rem .35rem;
+  min-height: 26.5rem;
+  display: flex; flex-direction: column;
+}
+.screen[data-theme="light"] { background: #FFFFFF; color: #16130F; }
+.screen[data-theme="light"] .status { color: #55503f; }
+
+.page-area { flex: 1 1 auto; display: flex; justify-content: center; }
+.page-text { width: calc(var(--cols, 68) * 1ch); max-width: 100%; white-space: pre-wrap; margin: 0; font: inherit; }
+.page-text mark { background: var(--term-sel); color: var(--term-sel-fg); border-radius: 2px; }
+.screen[data-theme="light"] .page-text mark { background: rgba(164,70,26,.18); color: #16130F; }
+.page-text .hit { background: var(--term-hit); color: #1a1108; border-radius: 2px; }
+.page-text .saved { border-bottom: 2px solid var(--accent); }
+
+.status {
+  flex: 0 0 auto; padding-top: .55rem; margin-top: .35rem;
+  border-top: 1px solid var(--term-edge);
+  color: var(--term-dim); font-size: .95em;
+  display: flex; align-items: center; gap: .5rem;
+  min-height: 2.1em;
+}
+.status .vis { color: #1a1108; background: var(--accent); padding: 0 .45em; border-radius: 2px; font-weight: 600; }
+.status .toast { color: var(--accent-2); }
+
+/* modal panels inside the terminal — :toc, :hl, help */
+.panel {
+  position: absolute; inset: 2.2rem 1.4rem 3rem;
+  background: var(--term-chrome); border: 1px solid var(--term-edge);
+  border-radius: .4rem; padding: .7rem .9rem; overflow: auto;
+  box-shadow: 0 18px 44px -14px rgba(0,0,0,.7);
+}
+.screen[data-theme="light"] .panel { background: #F7F4EC; border-color: rgba(0,0,0,.14); }
+.panel h4 { font-family: var(--mono); font-size: .95em; font-weight: 600; color: var(--accent-2); margin-bottom: .5rem; letter-spacing: 0; }
+.panel ul { list-style: none; margin: 0; padding: 0; }
+.panel li { padding: .12em .4em; border-radius: 2px; white-space: pre-wrap; }
+.panel li[aria-selected="true"] { background: var(--term-sel); color: var(--term-sel-fg); }
+.screen[data-theme="light"] .panel li[aria-selected="true"] { background: rgba(164,70,26,.16); color: #16130F; }
+.panel .empty { color: var(--term-dim); }
+
+/* library table inside the terminal */
+.lib { width: 100%; }
+.lib .row { display: block; padding: .1em .4em; border-radius: 2px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.lib .row[aria-selected="true"] { background: var(--term-sel); color: var(--term-sel-fg); }
+.screen[data-theme="light"] .lib .row[aria-selected="true"] { background: rgba(164,70,26,.16); color: #16130F; }
+.lib .row.off { color: var(--term-dim); }
+.lib .head { color: var(--term-dim); padding: .1em .4em; white-space: pre; border-bottom: 1px solid var(--term-edge); margin-bottom: .3em; }
+
+.demo-legend {
+  max-width: 56rem; margin-inline: auto;
+  display: flex; flex-wrap: wrap; gap: .5rem .9rem; align-items: center;
+  margin-top: .95rem; font-family: var(--sans); font-size: .82rem; color: var(--ink-3);
+}
+.demo-legend b { color: var(--ink-2); font-weight: 600; }
+.demo-legend .pulse { color: var(--accent); font-weight: 600; }
+kbd {
+  font-family: var(--mono); font-size: .82em; font-weight: 550;
+  padding: .18em .42em; border-radius: .3rem;
+  border: 1px solid var(--rule-2); border-bottom-width: 2px;
+  background: var(--card); color: var(--ink);
+  font-variant-numeric: normal;
+}
+
+/* ── sections ───────────────────────────────────────────────── */
+
+section { padding-block: clamp(3.5rem, 8vw, 6.5rem); }
+.band { background: var(--paper-2); border-block: 1px solid var(--rule); }
+
+.head { max-width: var(--measure); margin-bottom: clamp(2rem, 4vw, 3rem); }
+.head h2 { font-size: clamp(2rem, 5vw, 3.15rem); line-height: 1.06; margin-block: .7rem .85rem; }
+.head p { color: var(--ink-2); font-size: 1.06rem; }
+
+.prose { max-width: var(--measure); color: var(--ink-2); display: flex; flex-direction: column; gap: 1.05rem; }
+.prose strong { color: var(--ink); font-weight: 600; }
+.prose code, .inline-code {
+  font-family: var(--mono); font-size: .86em; color: var(--ink);
+  background: var(--accent-soft); padding: .1em .35em; border-radius: .25rem;
+  font-variant-numeric: normal;
+}
+
+.split { display: grid; gap: clamp(2rem, 5vw, 3.5rem); align-items: start; }
+.split > * { min-width: 0; }
+@media (min-width: 58rem) { .split { grid-template-columns: minmax(0,.85fr) minmax(0,1fr); } }
+
+/* the export pane */
+.md {
+  border-radius: .7rem; border: 1px solid var(--rule); overflow: hidden;
+  background: var(--card); box-shadow: var(--shadow); min-width: 0;
+}
+.md-bar {
+  display: flex; align-items: center; gap: .6rem; justify-content: space-between;
+  padding: .6rem .9rem; border-bottom: 1px solid var(--rule);
+  background: var(--paper-2);
+  font-family: var(--mono); font-size: .76rem; color: var(--ink-2);
+}
+.md-bar .dot { width: .45rem; height: .45rem; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
+.md-bar > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.md-state {
+  flex: 0 0 auto; margin-left: auto; margin-right: .1rem;
+  font-size: .66rem; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--accent); border: 1px solid var(--accent-soft);
+  background: var(--accent-soft); padding: .16rem .42rem; border-radius: .28rem;
+}
+.md pre {
+  margin: 0; padding: 1.05rem 1.15rem;
+  /* soft-wrapped, the way you would actually read this file in an editor */
+  white-space: pre-wrap; overflow-wrap: break-word;
+  font-family: var(--mono); font-size: .8rem; line-height: 1.72; color: var(--ink);
+  font-variant-numeric: normal; tab-size: 2;
+  max-height: 32rem; overflow-y: auto;
+}
+.md pre .q { display: inline-block; text-indent: -1.1ch; padding-left: 1.1ch; }
+.md .k { color: var(--ink-3); }
+.md .q { color: var(--accent); }
+.md .h { color: var(--ink); font-weight: 600; }
+.md .empty { color: var(--ink-3); font-style: italic; font-family: var(--serif); }
+
+/* pipeline steps */
+.steps { list-style: none; margin: 1.6rem 0 0; padding: 0; counter-reset: s; display: flex; flex-direction: column; gap: .55rem; }
+.steps li {
+  display: flex; gap: .85rem; align-items: baseline;
+  padding: .8rem 1rem; border: 1px solid var(--rule); border-radius: .6rem;
+  background: var(--card); font-size: .96rem; color: var(--ink-2);
+}
+.steps li::before {
+  counter-increment: s; content: counter(s);
+  flex: 0 0 auto; width: 1.45rem; height: 1.45rem; border-radius: .35rem;
+  display: inline-grid; place-items: center;
+  font-family: var(--mono); font-size: .72rem; color: var(--accent);
+  background: var(--accent-soft); border: 1px solid var(--accent-soft);
+  font-variant-numeric: normal;
+}
+.steps li b { color: var(--ink); font-weight: 600; }
+
+/* ── keymap ─────────────────────────────────────────────────── */
+
+.keymap { display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: .7rem; overflow: hidden; }
+@media (min-width: 40rem) { .keymap { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 66rem) { .keymap { grid-template-columns: 1fr 1fr 1fr; } }
+.key {
+  background: var(--card); padding: 1rem 1.1rem;
+  display: flex; flex-direction: column; gap: .4rem;
+}
+.key .combo { display: flex; gap: .3rem; align-items: center; flex-wrap: wrap; }
+.key .combo em { font-style: normal; color: var(--ink-3); font-size: .82rem; font-family: var(--sans); }
+.key p { font-size: .9rem; color: var(--ink-2); font-family: var(--sans); line-height: 1.45; }
+
+/* ── re-anchor demo ─────────────────────────────────────────── */
+
+.anchor-demo { border: 1px solid var(--rule); border-radius: .8rem; background: var(--card); overflow: hidden; box-shadow: var(--shadow); }
+.anchor-head { padding: .7rem .95rem; border-bottom: 1px solid var(--rule); background: var(--paper-2); font-family: var(--mono); font-size: .76rem; color: var(--ink-2); display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
+.anchor-body { padding: 1.15rem 1.2rem; font-size: .95rem; line-height: 1.75; }
+.anchor-body .ctx { color: var(--ink-3); }
+.anchor-body .hl { background: var(--accent-soft); border-bottom: 2px solid var(--accent); padding: .05em 0; }
+.anchor-body .gone { text-decoration: line-through; color: var(--ink-3); }
+.anchor-foot { padding: .8rem .95rem; border-top: 1px solid var(--rule); display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; justify-content: space-between; }
+.badge { font-family: var(--mono); font-size: .74rem; padding: .22rem .55rem; border-radius: .3rem; border: 1px solid; font-variant-numeric: normal; }
+.badge.ok      { color: #2E6B41; border-color: rgba(46,107,65,.4); background: rgba(46,107,65,.09); }
+.badge.drifted { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.badge.lost    { color: #9A3131; border-color: rgba(154,49,49,.42); background: rgba(154,49,49,.09); }
+@media (prefers-color-scheme: dark) {
+  .badge.ok { color: #7FCB98; border-color: rgba(127,203,152,.35); background: rgba(127,203,152,.1); }
+  .badge.lost { color: #E88A8A; border-color: rgba(232,138,138,.35); background: rgba(232,138,138,.1); }
+}
+
+/* ── honesty list ───────────────────────────────────────────── */
+
+.facts { display: grid; gap: 0; border-top: 1px solid var(--rule); }
+.fact {
+  display: grid; gap: .3rem 2rem; padding: 1.15rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+@media (min-width: 48rem) { .fact { grid-template-columns: 17rem minmax(0,1fr); align-items: baseline; } }
+.fact h3 { font-size: 1rem; font-weight: 600; }
+.fact p { color: var(--ink-2); font-size: .95rem; }
+
+/* ── numbers ────────────────────────────────────────────────── */
+
+.nums { display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: .7rem; overflow: hidden; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); margin-top: 2.5rem; }
+.num { background: var(--card); padding: 1.25rem 1.1rem; display: flex; flex-direction: column; gap: .2rem; }
+.num b { font-family: var(--mono); font-size: 1.6rem; font-weight: 600; letter-spacing: -.03em; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.num b small { font-size: .55em; color: var(--ink-3); margin-left: .1em; }
+.num span { font-family: var(--sans); font-size: .82rem; color: var(--ink-2); line-height: 1.4; }
+
+/* ── install ────────────────────────────────────────────────── */
+
+.paths { display: grid; gap: 1.1rem; align-items: start; }
+@media (min-width: 54rem) { .paths { grid-template-columns: 1fr 1fr; } }
+.path { border: 1px solid var(--rule); border-radius: .8rem; padding: 1.45rem 1.35rem; background: var(--card); display: flex; flex-direction: column; gap: .85rem; align-items: flex-start; min-width: 0; max-width: 100%; }
+.path > * { max-width: 100%; }
+.path.lead { border-color: var(--accent); }
+.path h3 { font-size: 1.12rem; }
+.path p { font-size: .93rem; color: var(--ink-2); }
+.path .cmd { margin-top: 0; width: 100%; box-shadow: none; background: var(--paper-2); }
+.path .cmd code { flex: 1 1 auto; }
+
+/* ── footer ─────────────────────────────────────────────────── */
+
+footer { border-top: 1px solid var(--rule); padding-block: 2.5rem 3.5rem; font-family: var(--sans); font-size: .86rem; color: var(--ink-3); }
+.foot-row { display: flex; flex-wrap: wrap; gap: 1rem 2rem; justify-content: space-between; align-items: center; }
+footer a { color: var(--ink-2); text-decoration: none; }
+footer a:hover { color: var(--accent); }
+.foot-links { display: flex; flex-wrap: wrap; gap: 1.35rem; }
+
+.colophon { margin-top: 1.5rem; max-width: 40rem; color: var(--ink-3); font-size: .82rem; line-height: 1.6; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<div class="shell">
+  <header class="masthead">
+    <a class="wordmark" href="/">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="4" y="6" width="10.4" height="20" rx="1.7" fill="currentColor" />
+        <rect x="17.6" y="6" width="10.4" height="20" rx="1.7" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".42" />
+      </svg>
+      verso
+    </a>
+    <nav>
+      <a href="#export">Export</a>
+      <a href="#keys">Keys</a>
+      <a href="#anchoring">Anchoring</a>
+      <a href="#scope">Scope</a>
+      <a href="#install">Install</a>
+    </nav>
+  </header>
+</div>
+
+<main id="main">
+
+  <div class="shell">
+    <div class="hero spread">
+      <div>
+        <p class="eyebrow">Terminal EPUB reader · macOS &amp; Linux</p>
+        <h1>Read like you <em>edit</em>.</h1>
+        <p class="hero-lede">
+          verso opens your library in the terminal, moves with the vim motions your
+          hands already know, and turns the passages you mark into
+          <strong>Markdown your notes app already understands</strong>.
+          One static binary. No network, no telemetry, no daemon.
+        </p>
+        <div class="cmd">
+          <span class="sigil" aria-hidden="true">$</span>
+          <code id="install-cmd">brew install romankhadka/tap/verso</code>
+          <button class="copy" data-copy="#install-cmd" type="button">Copy</button>
+        </div>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#install">Install verso</a>
+          <a class="button button-quiet" href="https://github.com/romankhadka/verso">View source</a>
+          <a class="button button-quiet" href="https://github.com/romankhadka/verso/releases/latest">Releases</a>
+        </div>
+      </div>
+
+      <!-- the recto: the right-hand page of the spread -->
+      <aside class="recto" aria-hidden="true">
+        <div class="runhead"><span>The Time Machine</span><span>I</span></div>
+        <p>The Time Traveller (for so it will be convenient to speak of him) was expounding a recondite matter to us. His grey eyes shone and twinkled, and his usually pale face was flushed and animated.</p>
+        <p>The fire burned brightly, and the soft radiance of the incandescent lights in the lilies of silver caught the bubbles that flashed and passed in our glasses.</p>
+        <span class="folio">1</span>
+      </aside>
+    </div>
+  </div>
+
+  <!-- ══ the demo ══ -->
+  <div class="shell demo-wrap">
+    <div class="term" id="term" tabindex="0" role="application"
+         aria-label="Interactive model of the verso terminal reader. Click or focus, then use vim keys: j and k to turn pages, ]] and [[ for chapters, v then y to highlight, colon for commands."
+         data-focused="0">
+      <div class="term-bar">
+        <i></i><i></i><i></i>
+        <span class="who" id="term-who">verso — ~/Books</span>
+      </div>
+      <div class="screen" id="screen" data-theme="dark" data-view="reader">
+        <div class="page-area"><pre class="page-text" id="page"></pre></div>
+        <div class="status" id="status" aria-live="polite"></div>
+      </div>
+    </div>
+    <div class="demo-legend">
+      <span class="pulse" id="focus-hint">Click the window, then press <kbd>j</kbd></span>
+      <span><b>j</b>/<b>k</b> page</span>
+      <span><b>]]</b>/<b>[[</b> chapter</span>
+      <span><b>v</b> then <b>y</b> highlight</span>
+      <span><b>/</b> search</span>
+      <span><b>:</b>toc <b>:</b>hl <b>:</b>export</span>
+      <span><b>q</b> library</span>
+      <span><b>?</b>&nbsp;<kbd>F1</kbd> help</span>
+    </div>
+  </div>
+
+  <!-- ══ export ══ -->
+  <section id="export" class="band">
+    <div class="shell">
+      <div class="head">
+        <p class="eyebrow">The point</p>
+        <h2>A passage in the terminal. A note in your vault.</h2>
+        <p>
+          Other terminal readers stop at reading. verso treats the highlight as the
+          product: every one you take is stored with its surrounding context in
+          SQLite, and <span class="inline-code">:export</span> projects the lot into a
+          single Markdown file with YAML frontmatter — the shape Obsidian, Logseq
+          and Zotero all already read.
+        </p>
+      </div>
+
+      <div class="split">
+        <div>
+          <div class="prose">
+            <p>
+              The database is the source of truth and the Markdown is a projection, so
+              re-running the export is always safe — it overwrites, never appends
+              duplicates.
+            </p>
+          </div>
+          <ol class="steps">
+            <li><span><b>Press <kbd>v</kbd></b> in the reader. The status line shows <span class="inline-code">[VIS]</span>.</span></li>
+            <li><span><b>Move</b> with the same motion keys to extend the selection.</span></li>
+            <li><span><b>Press <kbd>y</kbd></b> to yank it. verso stores the text plus ~80 characters either side.</span></li>
+            <li><span><b>Run <span class="inline-code">:export</span></b> — or <span class="inline-code">verso export book.epub</span> from your shell.</span></li>
+          </ol>
+          <div class="prose" style="margin-top:1.4rem">
+            <p style="font-size:.92rem">
+              Written to <span class="inline-code">~/Books/highlights/&lt;slug&gt;.md</span>.
+              The panel opposite is a port of the same renderer the binary ships.
+              Highlight a passage in the demo above and it swaps this example for yours.
+            </p>
+          </div>
+        </div>
+
+        <div class="md">
+          <div class="md-bar">
+            <span><span class="dot"></span> ~/Books/highlights/the-time-machine.md</span>
+            <span class="md-state" id="md-state">example</span>
+            <button class="copy" data-copy="#md-out" type="button">Copy</button>
+          </div>
+          <pre id="md-out"></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ keys ══ -->
+  <section id="keys">
+    <div class="shell">
+      <div class="head">
+        <p class="eyebrow">Motions</p>
+        <h2>Your hands already know this</h2>
+        <p>
+          Every binding is the one you would guess, and every one of them is
+          rebindable in <span class="inline-code">~/.config/verso/config.toml</span>.
+          Bind a chord that collides with an existing prefix and verso refuses to
+          start rather than silently swallowing a key.
+        </p>
+      </div>
+      <div class="keymap">
+        <div class="key"><div class="combo"><kbd>j</kbd><kbd>k</kbd><em>· ↓ ↑</em></div><p>Move down or up one page.</p></div>
+        <div class="key"><div class="combo"><kbd>space</kbd><kbd>f</kbd><em>·</em><kbd>b</kbd></div><p>Page forward, page back.</p></div>
+        <div class="key"><div class="combo"><kbd>d</kbd><kbd>u</kbd><em>· ^d ^u</em></div><p>Half a page at a time.</p></div>
+        <div class="key"><div class="combo"><kbd>gg</kbd><em>·</em><kbd>G</kbd></div><p>First page, last page.</p></div>
+        <div class="key"><div class="combo"><kbd>]]</kbd><em>·</em><kbd>[[</kbd></div><p>Next or previous chapter in the spine.</p></div>
+        <div class="key"><div class="combo"><kbd>/</kbd><kbd>?</kbd><em>·</em><kbd>n</kbd><kbd>N</kbd></div><p>Search forward or back; jump between matches. Wraps at the ends.</p></div>
+        <div class="key"><div class="combo"><kbd>v</kbd><em>then</em><kbd>y</kbd></div><p>Visual select, then yank the passage as a highlight.</p></div>
+        <div class="key"><div class="combo"><kbd>ma</kbd><em>·</em><kbd>'a</kbd></div><p>Set and jump to named marks, <kbd>a</kbd>–<kbd>z</kbd>, saved between sessions.</p></div>
+        <div class="key"><div class="combo"><kbd>H</kbd><em>·</em><kbd>:hl</kbd></div><p>Highlights panel — jump to one, or delete it.</p></div>
+        <div class="key"><div class="combo"><kbd>:toc</kbd></div><p>Jump anywhere: a floating list of the whole spine.</p></div>
+        <div class="key"><div class="combo"><kbd>gt</kbd><em>·</em><kbd>z=</kbd></div><p>Cycle theme (dark → sepia → light) and column width (55 / 68 / 80).</p></div>
+        <div class="key"><div class="combo"><kbd>q</kbd><em>·</em><kbd>F1</kbd></div><p>Back to the library; open the help overlay.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ anchoring ══ -->
+  <section id="anchoring" class="band">
+    <div class="shell">
+      <div class="head">
+        <p class="eyebrow">Durability</p>
+        <h2>Highlights that survive the book changing</h2>
+        <p>
+          A highlight pinned to a byte offset dies the moment you replace the EPUB
+          with a corrected edition. verso stores about eighty characters of context
+          on either side of every passage and re-finds it on load.
+        </p>
+      </div>
+
+      <div class="split">
+        <div class="prose">
+          <p>
+            Three outcomes, and verso tells you which one you got rather than quietly
+            guessing. <strong>Ok</strong> — the passage was found exactly where the
+            context says it should be. <strong>Drifted</strong> — the surroundings
+            moved but a best-fit match was found, so the highlight still points
+            somewhere sensible. <strong>Lost</strong> — the text is gone from the new
+            edition.
+          </p>
+          <p>
+            Even a lost highlight <strong>keeps the words you captured</strong>. You
+            lose the ability to jump to it in the book; you never lose the note. Both
+            states are visible in the <span class="inline-code">:hl</span> panel and
+            tagged in the exported Markdown as
+            <span class="inline-code">*(drifted)*</span> or
+            <span class="inline-code">*(lost)*</span>.
+          </p>
+          <p style="font-size:.92rem">
+            Try it: the panel opposite holds one highlight from chapter I. Re-import an
+            edited edition and watch what happens to it.
+          </p>
+        </div>
+
+        <div class="anchor-demo">
+          <div class="anchor-head">
+            <span id="anchor-file">the-time-machine.epub · edition 1</span>
+            <span class="badge ok" id="anchor-badge">ok</span>
+          </div>
+          <div class="anchor-body" id="anchor-body"></div>
+          <div class="anchor-foot">
+            <span style="font-family:var(--mono); font-size:.74rem; color:var(--ink-3)" id="anchor-note">Anchored on ±80 characters of context.</span>
+            <button class="button button-quiet" id="anchor-next" type="button" style="font-size:.84rem; padding:.45rem .8rem">Re-import edited edition</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ scope ══ -->
+  <section id="scope">
+    <div class="shell">
+      <div class="head">
+        <p class="eyebrow">Scope</p>
+        <h2>What it is, and what it is not</h2>
+        <p>
+          v1 does one format properly rather than four badly. Here is the whole
+          truth about the edges, so nothing surprises you after you install it.
+        </p>
+      </div>
+      <div class="facts">
+        <div class="fact"><h3>EPUB only, for now</h3><p>PDF lands in v1.3, MOBI and AZW3 in v2.2 by way of Calibre's <span class="inline-code">ebook-convert</span>. Cover images and a grid view arrive in v1.2.</p></div>
+        <div class="fact"><h3>Text only, any terminal</h3><p>No Kitty, Sixel or iTerm2 graphics protocol required — v1 renders text, so it works over SSH and in tmux. Cover rendering is opt-in later.</p></div>
+        <div class="fact"><h3>No network. At all.</h3><p>Nothing is fetched, nothing is reported. No accounts, no sync in v1, no telemetry ever. Your library is a folder and one SQLite file.</p></div>
+        <div class="fact"><h3>No DRM removal</h3><p>Out of scope permanently. Strip DRM from your own purchases with your own tools before importing.</p></div>
+        <div class="fact"><h3>One binary, no runtime</h3><p>Static Rust. No Node, no Python, no daemon left running, nothing in your login items.</p></div>
+        <div class="fact"><h3>Sync is a v2 problem</h3><p>Progress and highlights stay on the machine that made them until git-backed sync lands in v2.0.</p></div>
+      </div>
+
+      <div class="nums">
+        <div class="num"><b>3,557</b><span>lines of Rust across 50 files</span></div>
+        <div class="num"><b>60</b><span>tests, green on Linux and macOS</span></div>
+        <div class="num"><b>0</b><span>network calls, ever</span></div>
+        <div class="num"><b>1</b><span>static binary to install</span></div>
+        <div class="num"><b>4</b><span>prebuilt targets per release</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ install ══ -->
+  <section id="install" class="band">
+    <div class="shell">
+      <div class="head">
+        <p class="eyebrow">Install</p>
+        <h2>Two commands, then drop in an EPUB</h2>
+        <p>
+          Pick a route. Then make a folder, put a book in it, and run
+          <span class="inline-code">verso</span> — that is the whole of the onboarding.
+        </p>
+      </div>
+
+      <div class="paths">
+        <div class="path lead">
+          <p class="eyebrow">Recommended</p>
+          <h3>Homebrew</h3>
+          <p>macOS and Linux, and the route that keeps itself updated.</p>
+          <div class="cmd"><span class="sigil" aria-hidden="true">$</span><code id="c-brew">brew install romankhadka/tap/verso</code><button class="copy" data-copy="#c-brew" type="button">Copy</button></div>
+        </div>
+
+        <div class="path">
+          <p class="eyebrow">Rust toolchain</p>
+          <h3>crates.io</h3>
+          <p>The crate is published as <span class="inline-code">verso-reader</span> — the name <span class="inline-code">verso</span> was already taken. The installed binary is still <span class="inline-code">verso</span>.</p>
+          <div class="cmd"><span class="sigil" aria-hidden="true">$</span><code id="c-cargo">cargo install verso-reader</code><button class="copy" data-copy="#c-cargo" type="button">Copy</button></div>
+        </div>
+
+        <div class="path">
+          <p class="eyebrow">No toolchain</p>
+          <h3>Prebuilt binary</h3>
+          <p>Every <span class="inline-code">v*</span> tag attaches macOS (Intel and Apple Silicon) and Linux musl (x86_64 and aarch64) builds. Extract it and put <span class="inline-code">verso</span> on your <span class="inline-code">PATH</span>.</p>
+          <a class="button button-quiet" href="https://github.com/romankhadka/verso/releases/latest">Latest release</a>
+        </div>
+
+        <div class="path">
+          <p class="eyebrow">Then</p>
+          <h3>First run</h3>
+          <p>Drop EPUBs into the folder and launch. The library rescans on filesystem changes, so a book added from another terminal appears in about half a second.</p>
+          <div class="cmd"><span class="sigil" aria-hidden="true">$</span><code id="c-run">mkdir -p ~/Books &amp;&amp; verso</code><button class="copy" data-copy="#c-run" type="button">Copy</button></div>
+        </div>
+      </div>
+
+      <p class="colophon">
+        Requires a UTF-8 terminal — any modern one will do. Configuration is entirely
+        opt-in at <span class="inline-code">~/.config/verso/config.toml</span>; the
+        database lives at <span class="inline-code">~/.local/share/verso/verso.db</span>.
+        Licensed MIT or Apache-2.0, your choice.
+      </p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="shell foot-row">
+    <a class="wordmark" href="/" style="font-size:1rem">
+      <svg viewBox="0 0 32 32" aria-hidden="true" style="width:1.15rem;height:1.15rem">
+        <rect x="4" y="6" width="10.4" height="20" rx="1.7" fill="currentColor" />
+        <rect x="17.6" y="6" width="10.4" height="20" rx="1.7" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".42" />
+      </svg>
+      verso
+    </a>
+    <div class="foot-links">
+      <a href="https://github.com/romankhadka/verso">GitHub</a>
+      <a href="https://github.com/romankhadka/verso/releases">Releases</a>
+      <a href="https://crates.io/crates/verso-reader">crates.io</a>
+      <a href="https://github.com/romankhadka/verso/blob/main/docs/keymap.md">Keymap</a>
+    </div>
+  </div>
+  <div class="shell">
+    <p class="colophon">
+      The demo above reads <em>The Time Machine</em> by H. G. Wells, from the
+      Standard Ebooks edition that verso uses as its own test fixture — public
+      domain in the United States. <em>verso</em>, in bookbinding, is the left-hand
+      page of an open spread.
+    </p>
+  </div>
+</footer>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ── the book ────────────────────────────────────────────────
+     Chapters I–III of The Time Machine, extracted from the same
+     EPUB fixture the test suite reads. */
+  const BOOK = [{"t":"I","p":["The Time Traveller (for so it will be convenient to speak of him) was expounding a recondite matter to us. His grey eyes shone and twinkled, and his usually pale face was flushed and animated. The fire burned brightly, and the soft radiance of the incandescent lights in the lilies of silver caught the bubbles that flashed and passed in our glasses. Our chairs, being his patents, embraced and caressed us rather than submitted to be sat upon, and there was that luxurious after-dinner atmosphere when thought roams gracefully free of the trammels of precision. And he put it to us in this way—marking the points with a lean forefinger—as we sat and lazily admired his earnestness over this new paradox (as we thought it) and his fecundity.","“You must follow me carefully. I shall have to controvert one or two ideas that are almost universally accepted. The geometry, for instance, they taught you at school is founded on a misconception.”","“Is not that rather a large thing to expect us to begin upon?” said Filby, an argumentative person with red hair.","“I do not mean to ask you to accept anything without reasonable ground for it. You will soon admit as much as I need from you. You know of course that a mathematical line, a line of thickness nil, has no real existence. They taught you that? Neither has a mathematical plane. These things are mere abstractions.”","“That is all right,” said the Psychologist.","“Nor, having only length, breadth, and thickness, can a cube have a real existence.”","“There I object,” said Filby. “Of course a solid body may exist. All real things—”","“So most people think. But wait a moment. Can an instantaneous cube exist?”","“Don’t follow you,” said Filby.","“Can a cube that does not last for any time at all, have a real existence?”","Filby became pensive. “Clearly,” the Time Traveller proceeded, “any real body must have extension in four directions: it must have Length, Breadth, Thickness, and—Duration. But through a natural infirmity of the flesh, which I will explain to you in a moment, we incline to overlook this fact. There are really four dimensions, three which we call the three planes of Space, and a fourth, Time. There is, however, a tendency to draw an unreal distinction between the former three dimensions and the latter, because it happens that our consciousness moves intermittently in one direction along the latter from the beginning to the end of our lives.”","“That,” said a very young man, making spasmodic efforts to relight his cigar over the lamp; “that … very clear indeed.”","“Now, it is very remarkable that this is so extensively overlooked,” continued the Time Traveller, with a slight accession of cheerfulness. “Really this is what is meant by the Fourth Dimension, though some people who talk about the Fourth Dimension do not know they mean it. It is only another way of looking at Time. There is no difference between Time and any of the three dimensions of Space except that our consciousness moves along it. But some foolish people have got hold of the wrong side of that idea. You have all heard what they have to say about this Fourth Dimension?”","“I have not,” said the Provincial Mayor.","“It is simply this. That Space, as our mathematicians have it, is spoken of as having three dimensions, which one may call Length, Breadth, and Thickness, and is always definable by reference to three planes, each at right angles to the others. But some philosophical people have been asking why three dimensions particularly—why not another direction at right angles to the other three?—and have even tried to construct a Four-Dimension geometry. Professor Simon Newcomb was expounding this to the New York Mathematical Society only a month or so ago. You know how on a flat surface, which has only two dimensions, we can represent a figure of a three-dimensional solid, and similarly they think that by models of three dimensions they could represent one of four—if they could master the perspective of the thing. See?”","“I think so,” murmured the Provincial Mayor; and, knitting his brows, he lapsed into an introspective state, his lips moving as one who repeats mystic words. “Yes, I think I see it now,” he said after some time, brightening in a quite transitory manner.","“Well, I do not mind telling you I have been at work upon this geometry of Four Dimensions for some time. Some of my results are curious. For instance, here is a portrait of a man at eight years old, another at fifteen, another at seventeen, another at twenty-three, and so on. All these are evidently sections, as it were, Three-Dimensional representations of his Four-Dimensioned being, which is a fixed and unalterable thing.","“Scientific people,” proceeded the Time Traveller, after the pause required for the proper assimilation of this, “know very well that Time is only a kind of Space. Here is a popular scientific diagram, a weather record. This line I trace with my finger shows the movement of the barometer. Yesterday it was so high, yesterday night it fell, then this morning it rose again, and so gently upward to here. Surely the mercury did not trace this line in any of the dimensions of Space generally recognized? But certainly it traced such a line, and that line, therefore, we must conclude was along the Time-Dimension.”","“But,” said the Medical Man, staring hard at a coal in the fire, “if Time is really only a fourth dimension of Space, why is it, and why has it always been, regarded as something different? And why cannot we move in Time as we move about in the other dimensions of Space?”","The Time Traveller smiled. “Are you sure we can move freely in Space? Right and left we can go, backward and forward freely enough, and men always have done so. I admit we move freely in two dimensions. But how about up and down? Gravitation limits us there.”","“Not exactly,” said the Medical Man. “There are balloons.”","“But before the balloons, save for spasmodic jumping and the inequalities of the surface, man had no freedom of vertical movement.”","“Still they could move a little up and down,” said the Medical Man.","“Easier, far easier down than up.”","“And you cannot move at all in Time, you cannot get away from the present moment.”","“My dear sir, that is just where you are wrong. That is just where the whole world has gone wrong. We are always getting away from the present moment. Our mental existences, which are immaterial and have no dimensions, are passing along the Time-Dimension with a uniform velocity from the cradle to the grave. Just as we should travel down if we began our existence fifty miles above the earth’s surface.”","“But the great difficulty is this,” interrupted the Psychologist. “You can move about in all directions of Space, but you cannot move about in Time.”","“That is the germ of my great discovery. But you are wrong to say that we cannot move about in Time. For instance, if I am recalling an incident very vividly I go back to the instant of its occurrence: I become absentminded, as you say. I jump back for a moment. Of course we have no means of staying back for any length of Time, any more than a savage or an animal has of staying six feet above the ground. But a civilized man is better off than the savage in this respect. He can go up against gravitation in a balloon, and why should he not hope that ultimately he may be able to stop or accelerate his drift along the Time-Dimension, or even turn about and travel the other way?”","“Oh, this,” began Filby, “is all—”","“Why not?” said the Time Traveller.","“It’s against reason,” said Filby.","“What reason?” said the Time Traveller.","“You can show black is white by argument,” said Filby, “but you will never convince me.”","“Possibly not,” said the Time Traveller. “But now you begin to see the object of my investigations into the geometry of Four Dimensions. Long ago I had a vague inkling of a machine—”","“To travel through Time!” exclaimed the Very Young Man.","“That shall travel indifferently in any direction of Space and Time, as the driver determines.”","Filby contented himself with laughter.","“But I have experimental verification,” said the Time Traveller.","“It would be remarkably convenient for the historian,” the Psychologist suggested. “One might travel back and verify the accepted account of the Battle of Hastings, for instance!”","“Don’t you think you would attract attention?” said the Medical Man. “Our ancestors had no great tolerance for anachronisms.”","“One might get one’s Greek from the very lips of Homer and Plato,” the Very Young Man thought.","“In which case they would certainly plough you for the Little-go. The German scholars have improved Greek so much.”","“Then there is the future,” said the Very Young Man. “Just think! One might invest all one’s money, leave it to accumulate at interest, and hurry on ahead!”","“To discover a society,” said I, “erected on a strictly communistic basis.”","“Of all the wild extravagant theories!” began the Psychologist.","“Yes, so it seemed to me, and so I never talked of it until—”","“Experimental verification!” cried I. “You are going to verify that?”","“The experiment!” cried Filby, who was getting brain-weary.","“Let’s see your experiment anyhow,” said the Psychologist, “though it’s all humbug, you know.”","The Time Traveller smiled round at us. Then, still smiling faintly, and with his hands deep in his trousers pockets, he walked slowly out of the room, and we heard his slippers shuffling down the long passage to his laboratory.","The Psychologist looked at us. “I wonder what he’s got?”","“Some sleight-of-hand trick or other,” said the Medical Man, and Filby tried to tell us about a conjurer he had seen at Burslem; but before he had finished his preface the Time Traveller came back, and Filby’s anecdote collapsed.","The thing the Time Traveller held in his hand was a glittering metallic framework, scarcely larger than a small clock, and very delicately made. There was ivory in it, and some transparent crystalline substance. And now I must be explicit, for this that follows—unless his explanation is to be accepted—is an absolutely unaccountable thing. He took one of the small octagonal tables that were scattered about the room, and set it in front of the fire, with two legs on the hearthrug. On this table he placed the mechanism. Then he drew up a chair, and sat down. The only other object on the table was a small shaded lamp, the bright light of which fell upon the model. There were also perhaps a dozen candles about, two in brass candlesticks upon the mantel and several in sconces, so that the room was brilliantly illuminated. I sat in a low armchair nearest the fire, and I drew this forward so as to be almost between the Time Traveller and the fireplace. Filby sat behind him, looking over his shoulder. The Medical Man and the Provincial Mayor watched him in profile from the right, the Psychologist from the left. The Very Young Man stood behind the Psychologist. We were all on the alert. It appears incredible to me that any kind of trick, however subtly conceived and however adroitly done, could have been played upon us under these conditions.","The Time Traveller looked at us, and then at the mechanism. “Well?” said the Psychologist.","“This little affair,” said the Time Traveller, resting his elbows upon the table and pressing his hands together above the apparatus, “is only a model. It is my plan for a machine to travel through time. You will notice that it looks singularly askew, and that there is an odd twinkling appearance about this bar, as though it was in some way unreal.” He pointed to the part with his finger. “Also, here is one little white lever, and here is another.”","The Medical Man got up out of his chair and peered into the thing. “It’s beautifully made,” he said.","“It took two years to make,” retorted the Time Traveller. Then, when we had all imitated the action of the Medical Man, he said: “Now I want you clearly to understand that this lever, being pressed over, sends the machine gliding into the future, and this other reverses the motion. This saddle represents the seat of a time traveller. Presently I am going to press the lever, and off the machine will go. It will vanish, pass into future Time, and disappear. Have a good look at the thing. Look at the table too, and satisfy yourselves there is no trickery. I don’t want to waste this model, and then be told I’m a quack.”","There was a minute’s pause perhaps. The Psychologist seemed about to speak to me, but changed his mind. Then the Time Traveller put forth his finger towards the lever. “No,” he said suddenly. “Lend me your hand.” And turning to the Psychologist, he took that individual’s hand in his own and told him to put out his forefinger. So that it was the Psychologist himself who sent forth the model Time Machine on its interminable voyage. We all saw the lever turn. I am absolutely certain there was no trickery. There was a breath of wind, and the lamp flame jumped. One of the candles on the mantel was blown out, and the little machine suddenly swung round, became indistinct, was seen as a ghost for a second perhaps, as an eddy of faintly glittering brass and ivory; and it was gone—vanished! Save for the lamp the table was bare.","Everyone was silent for a minute. Then Filby said he was damned.","The Psychologist recovered from his stupor, and suddenly looked under the table. At that the Time Traveller laughed cheerfully. “Well?” he said, with a reminiscence of the Psychologist. Then, getting up, he went to the tobacco jar on the mantel, and with his back to us began to fill his pipe.","We stared at each other. “Look here,” said the Medical Man, “are you in earnest about this? Do you seriously believe that that machine has travelled into time?”","“Certainly,” said the Time Traveller, stooping to light a spill at the fire. Then he turned, lighting his pipe, to look at the Psychologist’s face. (The Psychologist, to show that he was not unhinged, helped himself to a cigar and tried to light it uncut.) “What is more, I have a big machine nearly finished in there”—he indicated the laboratory—“and when that is put together I mean to have a journey on my own account.”","“You mean to say that that machine has travelled into the future?” said Filby.","“Into the future or the past—I don’t, for certain, know which.”","After an interval the Psychologist had an inspiration. “It must have gone into the past if it has gone anywhere,” he said.","“Why?” said the Time Traveller.","“Because I presume that it has not moved in space, and if it travelled into the future it would still be here all this time, since it must have travelled through this time.”","“But,” I said, “if it travelled into the past it would have been visible when we came first into this room; and last Thursday when we were here; and the Thursday before that; and so forth!”","“Serious objections,” remarked the Provincial Mayor, with an air of impartiality, turning towards the Time Traveller.","“Not a bit,” said the Time Traveller, and, to the Psychologist: “You think. You can explain that. It’s presentation below the threshold, you know, diluted presentation.”","“Of course,” said the Psychologist, and reassured us. “That’s a simple point of psychology. I should have thought of it. It’s plain enough, and helps the paradox delightfully. We cannot see it, nor can we appreciate this machine, any more than we can the spoke of a wheel spinning, or a bullet flying through the air. If it is travelling through time fifty times or a hundred times faster than we are, if it gets through a minute while we get through a second, the impression it creates will of course be only one-fiftieth or one-hundredth of what it would make if it were not travelling in time. That’s plain enough.” He passed his hand through the space in which the machine had been. “You see?” he said, laughing.","We sat and stared at the vacant table for a minute or so. Then the Time Traveller asked us what we thought of it all.","“It sounds plausible enough tonight,” said the Medical Man; “but wait until tomorrow. Wait for the common sense of the morning.”","“Would you like to see the Time Machine itself?” asked the Time Traveller. And therewith, taking the lamp in his hand, he led the way down the long, draughty corridor to his laboratory. I remember vividly the flickering light, his queer, broad head in silhouette, the dance of the shadows, how we all followed him, puzzled but incredulous, and how there in the laboratory we beheld a larger edition of the little mechanism which we had seen vanish from before our eyes. Parts were of nickel, parts of ivory, parts had certainly been filed or sawn out of rock crystal. The thing was generally complete, but the twisted crystalline bars lay unfinished upon the bench beside some sheets of drawings, and I took one up for a better look at it. Quartz it seemed to be.","“Look here,” said the Medical Man, “are you perfectly serious? Or is this a trick—like that ghost you showed us last Christmas?”","“Upon that machine,” said the Time Traveller, holding the lamp aloft, “I intend to explore time. Is that plain? I was never more serious in my life.”","None of us quite knew how to take it.","I caught Filby’s eye over the shoulder of the Medical Man, and he winked at me solemnly."]},{"t":"II","p":["I think that at that time none of us quite believed in the Time Machine. The fact is, the Time Traveller was one of those men who are too clever to be believed: you never felt that you saw all round him; you always suspected some subtle reserve, some ingenuity in ambush, behind his lucid frankness. Had Filby shown the model and explained the matter in the Time Traveller’s words, we should have shown him far less scepticism. For we should have perceived his motives; a pork butcher could understand Filby. But the Time Traveller had more than a touch of whim among his elements, and we distrusted him. Things that would have made the frame of a less clever man seemed tricks in his hands. It is a mistake to do things too easily. The serious people who took him seriously never felt quite sure of his deportment; they were somehow aware that trusting their reputations for judgment with him was like furnishing a nursery with eggshell china. So I don’t think any of us said very much about time travelling in the interval between that Thursday and the next, though its odd potentialities ran, no doubt, in most of our minds: its plausibility, that is, its practical incredibleness, the curious possibilities of anachronism and of utter confusion it suggested. For my own part, I was particularly preoccupied with the trick of the model. That I remember discussing with the Medical Man, whom I met on Friday at the Linnaean. He said he had seen a similar thing at Tubingen, and laid considerable stress on the blowing out of the candle. But how the trick was done he could not explain.","The next Thursday I went again to Richmond—I suppose I was one of the Time Traveller’s most constant guests—and, arriving late, found four or five men already assembled in his drawing-room. The Medical Man was standing before the fire with a sheet of paper in one hand and his watch in the other. I looked round for the Time Traveller, and—“It’s half-past seven now,” said the Medical Man. “I suppose we’d better have dinner?”","“Where’s—?” said I, naming our host.","“You’ve just come? It’s rather odd. He’s unavoidably detained. He asks me in this note to lead off with dinner at seven if he’s not back. Says he’ll explain when he comes.”","“It seems a pity to let the dinner spoil,” said the Editor of a well-known daily paper; and thereupon the Doctor rang the bell.","The Psychologist was the only person besides the Doctor and myself who had attended the previous dinner. The other men were Blank, the Editor aforementioned, a certain journalist, and another—a quiet, shy man with a beard—whom I didn’t know, and who, as far as my observation went, never opened his mouth all the evening. There was some speculation at the dinner-table about the Time Traveller’s absence, and I suggested time travelling, in a half-jocular spirit. The Editor wanted that explained to him, and the Psychologist volunteered a wooden account of the “ingenious paradox and trick” we had witnessed that day week. He was in the midst of his exposition when the door from the corridor opened slowly and without noise. I was facing the door, and saw it first. “Hallo!” I said. “At last!” And the door opened wider, and the Time Traveller stood before us. I gave a cry of surprise. “Good heavens! man, what’s the matter?” cried the Medical Man, who saw him next. And the whole tableful turned towards the door.","He was in an amazing plight. His coat was dusty and dirty, and smeared with green down the sleeves; his hair disordered, and as it seemed to me greyer—either with dust and dirt or because its colour had actually faded. His face was ghastly pale; his chin had a brown cut on it—a cut half healed; his expression was haggard and drawn, as by intense suffering. For a moment he hesitated in the doorway, as if he had been dazzled by the light. Then he came into the room. He walked with just such a limp as I have seen in footsore tramps. We stared at him in silence, expecting him to speak.","He said not a word, but came painfully to the table, and made a motion towards the wine. The Editor filled a glass of champagne, and pushed it towards him. He drained it, and it seemed to do him good: for he looked round the table, and the ghost of his old smile flickered across his face. “What on earth have you been up to, man?” said the Doctor. The Time Traveller did not seem to hear. “Don’t let me disturb you,” he said, with a certain faltering articulation. “I’m all right.” He stopped, held out his glass for more, and took it off at a draught. “That’s good,” he said. His eyes grew brighter, and a faint colour came into his cheeks. His glance flickered over our faces with a certain dull approval, and then went round the warm and comfortable room. Then he spoke again, still as it were feeling his way among his words. “I’m going to wash and dress, and then I’ll come down and explain things … Save me some of that mutton. I’m starving for a bit of meat.”","He looked across at the Editor, who was a rare visitor, and hoped he was all right. The Editor began a question. “Tell you presently,” said the Time Traveller. “I’m—funny! Be all right in a minute.”","He put down his glass, and walked towards the staircase door. Again I remarked his lameness and the soft padding sound of his footfall, and standing up in my place, I saw his feet as he went out. He had nothing on them but a pair of tattered, bloodstained socks. Then the door closed upon him. I had half a mind to follow, till I remembered how he detested any fuss about himself. For a minute, perhaps, my mind was woolgathering. Then, “Remarkable Behaviour of an Eminent Scientist,” I heard the Editor say, thinking (after his wont) in headlines. And this brought my attention back to the bright dinner-table.","“What’s the game?” said the Journalist. “Has he been doing the Amateur Cadger? I don’t follow.” I met the eye of the Psychologist, and read my own interpretation in his face. I thought of the Time Traveller limping painfully upstairs. I don’t think anyone else had noticed his lameness.","The first to recover completely from this surprise was the Medical Man, who rang the bell—the Time Traveller hated to have servants waiting at dinner—for a hot plate. At that the Editor turned to his knife and fork with a grunt, and the Silent Man followed suit. The dinner was resumed. Conversation was exclamatory for a little while, with gaps of wonderment; and then the Editor got fervent in his curiosity. “Does our friend eke out his modest income with a crossing? or has he his Nebuchadnezzar phases?” he inquired. “I feel assured it’s this business of the Time Machine,” I said, and took up the Psychologist’s account of our previous meeting. The new guests were frankly incredulous. The Editor raised objections. “What was this time travelling? A man couldn’t cover himself with dust by rolling in a paradox, could he?” And then, as the idea came home to him, he resorted to caricature. Hadn’t they any clothes-brushes in the Future? The Journalist too, would not believe at any price, and joined the Editor in the easy work of heaping ridicule on the whole thing. They were both the new kind of journalist—very joyous, irreverent young men. “Our Special Correspondent in the Day after Tomorrow reports,” the Journalist was saying—or rather shouting—when the Time Traveller came back. He was dressed in ordinary evening clothes, and nothing save his haggard look remained of the change that had startled me.","“I say,” said the Editor hilariously, “these chaps here say you have been travelling into the middle of next week! Tell us all about little Rosebery, will you? What will you take for the lot?”","The Time Traveller came to the place reserved for him without a word. He smiled quietly, in his old way. “Where’s my mutton?” he said. “What a treat it is to stick a fork into meat again!”","“Story!” cried the Editor.","“Story be damned!” said the Time Traveller. “I want something to eat. I won’t say a word until I get some peptone into my arteries. Thanks. And the salt.”","“One word,” said I. “Have you been time travelling?”","“Yes,” said the Time Traveller, with his mouth full, nodding his head.","“I’d give a shilling a line for a verbatim note,” said the Editor. The Time Traveller pushed his glass towards the Silent Man and rang it with his fingernail; at which the Silent Man, who had been staring at his face, started convulsively, and poured him wine. The rest of the dinner was uncomfortable. For my own part, sudden questions kept on rising to my lips, and I dare say it was the same with the others. The Journalist tried to relieve the tension by telling anecdotes of Hettie Potter. The Time Traveller devoted his attention to his dinner, and displayed the appetite of a tramp. The Medical Man smoked a cigarette, and watched the Time Traveller through his eyelashes. The Silent Man seemed even more clumsy than usual, and drank champagne with regularity and determination out of sheer nervousness. At last the Time Traveller pushed his plate away, and looked round us. “I suppose I must apologize,” he said. “I was simply starving. I’ve had a most amazing time.” He reached out his hand for a cigar, and cut the end. “But come into the smoking-room. It’s too long a story to tell over greasy plates.” And ringing the bell in passing, he led the way into the adjoining room.","“You have told Blank, and Dash, and Chose about the machine?” he said to me, leaning back in his easy-chair and naming the three new guests.","“But the thing’s a mere paradox,” said the Editor.","“I can’t argue tonight. I don’t mind telling you the story, but I can’t argue. I will,” he went on, “tell you the story of what has happened to me, if you like, but you must refrain from interruptions. I want to tell it. Badly. Most of it will sound like lying. So be it! It’s true—every word of it, all the same. I was in my laboratory at four o’clock, and since then … I’ve lived eight days … such days as no human being ever lived before! I’m nearly worn out, but I shan’t sleep till I’ve told this thing over to you. Then I shall go to bed. But no interruptions! Is it agreed?”","“Agreed,” said the Editor, and the rest of us echoed “Agreed.” And with that the Time Traveller began his story as I have set it forth. He sat back in his chair at first, and spoke like a weary man. Afterwards he got more animated. In writing it down I feel with only too much keenness the inadequacy of pen and ink—and, above all, my own inadequacy—to express its quality. You read, I will suppose, attentively enough; but you cannot see the speaker’s white, sincere face in the bright circle of the little lamp, nor hear the intonation of his voice. You cannot know how his expression followed the turns of his story! Most of us hearers were in shadow, for the candles in the smoking-room had not been lighted, and only the face of the Journalist and the legs of the Silent Man from the knees downward were illuminated. At first we glanced now and again at each other. After a time we ceased to do that, and looked only at the Time Traveller’s face."]},{"t":"III","p":["“I told some of you last Thursday of the principles of the Time Machine, and showed you the actual thing itself, incomplete in the workshop. There it is now, a little travel-worn, truly; and one of the ivory bars is cracked, and a brass rail bent; but the rest of it’s sound enough. I expected to finish it on Friday, but on Friday, when the putting together was nearly done, I found that one of the nickel bars was exactly one inch too short, and this I had to get remade; so that the thing was not complete until this morning. It was at ten o’clock today that the first of all Time Machines began its career. I gave it a last tap, tried all the screws again, put one more drop of oil on the quartz rod, and sat myself in the saddle. I suppose a suicide who holds a pistol to his skull feels much the same wonder at what will come next as I felt then. I took the starting lever in one hand and the stopping one in the other, pressed the first, and almost immediately the second. I seemed to reel; I felt a nightmare sensation of falling; and, looking round, I saw the laboratory exactly as before. Had anything happened? For a moment I suspected that my intellect had tricked me. Then I noted the clock. A moment before, as it seemed, it had stood at a minute or so past ten; now it was nearly half-past three!","“I drew a breath, set my teeth, gripped the starting lever with both hands, and went off with a thud. The laboratory got hazy and went dark. Mrs. Watchett came in and walked, apparently without seeing me, towards the garden door. I suppose it took her a minute or so to traverse the place, but to me she seemed to shoot across the room like a rocket. I pressed the lever over to its extreme position. The night came like the turning out of a lamp, and in another moment came tomorrow. The laboratory grew faint and hazy, then fainter and ever fainter. Tomorrow night came black, then day again, night again, day again, faster and faster still. An eddying murmur filled my ears, and a strange, dumb confusedness descended on my mind.","“I am afraid I cannot convey the peculiar sensations of time travelling. They are excessively unpleasant. There is a feeling exactly like that one has upon a switchback—of a helpless headlong motion! I felt the same horrible anticipation, too, of an imminent smash. As I put on pace, night followed day like the flapping of a black wing. The dim suggestion of the laboratory seemed presently to fall away from me, and I saw the sun hopping swiftly across the sky, leaping it every minute, and every minute marking a day. I supposed the laboratory had been destroyed and I had come into the open air. I had a dim impression of scaffolding, but I was already going too fast to be conscious of any moving things. The slowest snail that ever crawled dashed by too fast for me. The twinkling succession of darkness and light was excessively painful to the eye. Then, in the intermittent darknesses, I saw the moon spinning swiftly through her quarters from new to full, and had a faint glimpse of the circling stars. Presently, as I went on, still gaining velocity, the palpitation of night and day merged into one continuous greyness; the sky took on a wonderful deepness of blue, a splendid luminous color like that of early twilight; the jerking sun became a streak of fire, a brilliant arch, in space; the moon a fainter fluctuating band; and I could see nothing of the stars, save now and then a brighter circle flickering in the blue.","“The landscape was misty and vague. I was still on the hillside upon which this house now stands, and the shoulder rose above me grey and dim. I saw trees growing and changing like puffs of vapour, now brown, now green; they grew, spread, shivered, and passed away. I saw huge buildings rise up faint and fair, and pass like dreams. The whole surface of the earth seemed changed—melting and flowing under my eyes. The little hands upon the dials that registered my speed raced round faster and faster. Presently I noted that the sun belt swayed up and down, from solstice to solstice, in a minute or less, and that consequently my pace was over a year a minute; and minute by minute the white snow flashed across the world, and vanished, and was followed by the bright, brief green of spring.","“The unpleasant sensations of the start were less poignant now. They merged at last into a kind of hysterical exhilaration. I remarked indeed a clumsy swaying of the machine, for which I was unable to account. But my mind was too confused to attend to it, so with a kind of madness growing upon me, I flung myself into futurity. At first I scarce thought of stopping, scarce thought of anything but these new sensations. But presently a fresh series of impressions grew up in my mind—a certain curiosity and therewith a certain dread—until at last they took complete possession of me. What strange developments of humanity, what wonderful advances upon our rudimentary civilization, I thought, might not appear when I came to look nearly into the dim elusive world that raced and fluctuated before my eyes! I saw great and splendid architecture rising about me, more massive than any buildings of our own time, and yet, as it seemed, built of glimmer and mist. I saw a richer green flow up the hillside, and remain there, without any wintry intermission. Even through the veil of my confusion the earth seemed very fair. And so my mind came round to the business of stopping.","“The peculiar risk lay in the possibility of my finding some substance in the space which I, or the machine, occupied. So long as I travelled at a high velocity through time, this scarcely mattered; I was, so to speak, attenuated—was slipping like a vapour through the interstices of intervening substances! But to come to a stop involved the jamming of myself, molecule by molecule, into whatever lay in my way; meant bringing my atoms into such intimate contact with those of the obstacle that a profound chemical reaction—possibly a far-reaching explosion—would result, and blow myself and my apparatus out of all possible dimensions—into the Unknown. This possibility had occurred to me again and again while I was making the machine; but then I had cheerfully accepted it as an unavoidable risk—one of the risks a man has got to take! Now the risk was inevitable, I no longer saw it in the same cheerful light. The fact is that, insensibly, the absolute strangeness of everything, the sickly jarring and swaying of the machine, above all, the feeling of prolonged falling, had absolutely upset my nerve. I told myself that I could never stop, and with a gust of petulance I resolved to stop forthwith. Like an impatient fool, I lugged over the lever, and incontinently the thing went reeling over, and I was flung headlong through the air.","“There was the sound of a clap of thunder in my ears. I may have been stunned for a moment. A pitiless hail was hissing round me, and I was sitting on soft turf in front of the overset machine. Everything still seemed grey, but presently I remarked that the confusion in my ears was gone. I looked round me. I was on what seemed to be a little lawn in a garden, surrounded by rhododendron bushes, and I noticed that their mauve and purple blossoms were dropping in a shower under the beating of the hailstones. The rebounding, dancing hail hung in a cloud over the machine, and drove along the ground like smoke. In a moment I was wet to the skin. ‘Fine hospitality,’ said I, ‘to a man who has travelled innumerable years to see you.’","“Presently I thought what a fool I was to get wet. I stood up and looked round me. A colossal figure, carved apparently in some white stone, loomed indistinctly beyond the rhododendrons through the hazy downpour. But all else of the world was invisible.","“My sensations would be hard to describe. As the columns of hail grew thinner, I saw the white figure more distinctly. It was very large, for a silver birch-tree touched its shoulder. It was of white marble, in shape something like a winged sphinx, but the wings, instead of being carried vertically at the sides, were spread so that it seemed to hover. The pedestal, it appeared to me, was of bronze, and was thick with verdigris. It chanced that the face was towards me; the sightless eyes seemed to watch me; there was the faint shadow of a smile on the lips. It was greatly weatherworn, and that imparted an unpleasant suggestion of disease. I stood looking at it for a little space—half a minute, perhaps, or half an hour. It seemed to advance and to recede as the hail drove before it denser or thinner. At last I tore my eyes from it for a moment and saw that the hail curtain had worn threadbare, and that the sky was lightening with the promise of the sun.","“I looked up again at the crouching white shape, and the full temerity of my voyage came suddenly upon me. What might appear when that hazy curtain was altogether withdrawn? What might not have happened to men? What if cruelty had grown into a common passion? What if in this interval the race had lost its manliness and had developed into something inhuman, unsympathetic, and overwhelmingly powerful? I might seem some old-world savage animal, only the more dreadful and disgusting for our common likeness—a foul creature to be incontinently slain.","“Already I saw other vast shapes—huge buildings with intricate parapets and tall columns, with a wooded hillside dimly creeping in upon me through the lessening storm. I was seized with a panic fear. I turned frantically to the Time Machine, and strove hard to readjust it. As I did so the shafts of the sun smote through the thunderstorm. The grey downpour was swept aside and vanished like the trailing garments of a ghost. Above me, in the intense blue of the summer sky, some faint brown shreds of cloud whirled into nothingness. The great buildings about me stood out clear and distinct, shining with the wet of the thunderstorm, and picked out in white by the unmelted hailstones piled along their courses. I felt naked in a strange world. I felt as perhaps a bird may feel in the clear air, knowing the hawk wings above and will swoop. My fear grew to frenzy. I took a breathing space, set my teeth, and again grappled fiercely, wrist and knee, with the machine. It gave under my desperate onset and turned over. It struck my chin violently. One hand on the saddle, the other on the lever, I stood panting heavily in attitude to mount again.","“But with this recovery of a prompt retreat my courage recovered. I looked more curiously and less fearfully at this world of the remote future. In a circular opening, high up in the wall of the nearer house, I saw a group of figures clad in rich soft robes. They had seen me, and their faces were directed towards me.","“Then I heard voices approaching me. Coming through the bushes by the White Sphinx were the heads and shoulders of men running. One of these emerged in a pathway leading straight to the little lawn upon which I stood with my machine. He was a slight creature—perhaps four feet high—clad in a purple tunic, girdled at the waist with a leather belt. Sandals or buskins—I could not clearly distinguish which—were on his feet; his legs were bare to the knees, and his head was bare. Noticing that, I noticed for the first time how warm the air was.","“He struck me as being a very beautiful and graceful creature, but indescribably frail. His flushed face reminded me of the more beautiful kind of consumptive—that hectic beauty of which we used to hear so much. At the sight of him I suddenly regained confidence. I took my hands from the machine."]}];
+
+  const TITLE  = "The Time Machine";
+  const AUTHOR = "H. G. Wells";
+  const PUBLISHED = "1895";
+  const SOURCE = "~/Books/the-time-machine.epub";
+  // verso runs from 40 columns up; a narrow screen is just a narrow terminal.
+  const pickCols = () => window.innerWidth < 760 ? 42 : 68;
+  let COLS = pickCols();
+  const ROWS = 16;
+
+  const $ = (s) => document.querySelector(s);
+  const term = $("#term"), screen = $("#screen"), pageEl = $("#page"),
+        statusEl = $("#status"), whoEl = $("#term-who"), focusHint = $("#focus-hint");
+
+  /* ── layout: wrap each chapter to COLS, paginate to ROWS ──── */
+
+  function layout(ch) {
+    const plain = ch.p.join("\n\n");
+    const lines = [];         // {s, start}
+    let off = 0;
+    ch.p.forEach((para, pi) => {
+      const words = para.split(" ");
+      let line = "", lineStart = off, cur = off;
+      words.forEach((w, wi) => {
+        const add = line ? " " + w : w;
+        if (line && (line.length + add.length) > COLS) {
+          lines.push({ s: line, start: lineStart });
+          line = w; lineStart = cur;
+        } else {
+          line += add;
+        }
+        cur += w.length + (wi < words.length - 1 ? 1 : 0);
+      });
+      if (line) lines.push({ s: line, start: lineStart });
+      off = cur;
+      if (pi < ch.p.length - 1) { lines.push({ s: "", start: off }); off += 2; }
+    });
+    const pages = [];
+    for (let i = 0; i < lines.length; i += ROWS) pages.push(lines.slice(i, i + ROWS));
+    return { plain, lines, pages };
+  }
+
+  let LAID = BOOK.map(layout);
+
+  // Re-flow when the terminal crosses the narrow/wide threshold, holding the
+  // reader's place by character offset rather than page number.
+  let relayoutT = null;
+  window.addEventListener("resize", () => {
+    const next = pickCols();
+    if (next === COLS) return;
+    clearTimeout(relayoutT);
+    relayoutT = setTimeout(() => {
+      const keep = pageStartOff();
+      COLS = next;
+      LAID = BOOK.map(layout);
+      S.page = 0;
+      jumpToOffset(keep);
+      render();
+    }, 120);
+  });
+
+  /* ── state ──────────────────────────────────────────────────── */
+
+  const S = {
+    view: "reader",        // reader | library
+    ch: 0, page: 0,
+    theme: "dark",
+    mode: "normal",        // normal | visual
+    anchor: 0,
+    panel: null,           // toc | hl | help
+    panelSel: 0,
+    cmd: null, search: null, searchDir: "/",
+    query: "", matches: [], matchIdx: -1,
+    pending: "",           // chord buffer: g, ], [, z, m, '
+    toast: null, toastT: null,
+    highlights: [],
+    libSel: 0, libSort: 0, libFilter: 0, libDetail: false,
+    exported: false
+  };
+
+  const SORTS = ["last-read", "title", "author", "progress", "added"];
+  const FILTERS = ["all", "reading", "unread", "finished", "broken"];
+
+  const LIB = [
+    { t: "The Time Machine", a: "H. G. Wells", pg: 118, prog: 0, left: "3h", last: "now", real: true, state: "reading" },
+    { t: "Dune",             a: "F. Herbert", pg: 688, prog: 12, left: "9h",  last: "2h",  state: "reading" },
+    { t: "SICP",             a: "Abelson",    pg: 657, prog: 47, left: "11h", last: "3d",  state: "reading" },
+    { t: "Zero to One",      a: "P. Thiel",   pg: 224, prog: 100, left: "—",  last: "60d", state: "finished" },
+    { t: "Deep Work",        a: "C. Newport", pg: 304, prog: 0,  left: "—",   last: "—",   state: "unread" }
+  ];
+
+  const cur = () => LAID[S.ch];
+  const pageStartOff = () => { const p = cur().pages[S.page]; return p && p.length ? p[0].start : 0; };
+  const pageEndOff = () => {
+    const p = cur().pages[S.page];
+    if (!p || !p.length) return 0;
+    const last = p[p.length - 1];
+    return last.start + last.s.length;
+  };
+  const chapterLabel = () => BOOK[S.ch].t;
+
+  function toast(msg) {
+    S.toast = msg;
+    if (S.toastT) clearTimeout(S.toastT);
+    S.toastT = setTimeout(() => { S.toast = null; render(); }, 3200);
+  }
+
+  /* ── render ─────────────────────────────────────────────────── */
+
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  function render() {
+    screen.style.setProperty("--cols", COLS);
+    screen.dataset.theme = S.theme;
+    screen.dataset.view = S.view;
+    whoEl.textContent = S.view === "library" ? "verso — Library" : "verso — " + SOURCE;
+    S.view === "library" ? renderLibrary() : renderReader();
+    renderStatus();
+    renderPanel();
+  }
+
+  function renderReader() {
+    const page = cur().pages[S.page] || [];
+    // selection range for visual mode
+    let selA = -1, selB = -1;
+    if (S.mode === "visual") {
+      selA = Math.min(S.anchor, pageStartOff());
+      selB = Math.max(S.anchor, pageEndOff());
+    }
+    const saved = S.highlights.filter(h => h.ch === S.ch);
+
+    const html = page.map(ln => {
+      if (!ln.s) return "";
+      let out = "", i = 0;
+      const marks = [];
+      // visual selection
+      if (selA >= 0) marks.push({ a: selA, b: selB, cls: "sel" });
+      saved.forEach(h => marks.push({ a: h.start, b: h.end, cls: "saved" }));
+      if (S.query && S.matches.length) {
+        S.matches.forEach(m => { if (m.ch === S.ch) marks.push({ a: m.at, b: m.at + S.query.length, cls: "hit" }); });
+      }
+      const chars = [...ln.s];
+      while (i < chars.length) {
+        const abs = ln.start + i;
+        const hit = marks.find(m => abs >= m.a && abs < m.b);
+        if (!hit) { out += esc(chars[i]); i++; continue; }
+        let j = i;
+        while (j < chars.length && (ln.start + j) >= hit.a && (ln.start + j) < hit.b) j++;
+        const seg = esc(chars.slice(i, j).join(""));
+        out += hit.cls === "sel" ? `<mark>${seg}</mark>` : `<span class="${hit.cls}">${seg}</span>`;
+        i = j;
+      }
+      return out;
+    }).join("\n");
+
+    pageEl.innerHTML = html;
+  }
+
+  function pad(s, n) { s = String(s); return s.length >= n ? s.slice(0, n) : s + " ".repeat(n - s.length); }
+  function bar(pct) { const f = Math.round(pct / 100 * 6); return "█".repeat(f) + "░".repeat(6 - f); }
+
+  function libRows() {
+    let rows = LIB.slice();
+    const f = FILTERS[S.libFilter];
+    if (f !== "all") rows = rows.filter(r => r.state === f);
+    const s = SORTS[S.libSort];
+    if (s === "title") rows.sort((a, b) => a.t.localeCompare(b.t));
+    else if (s === "author") rows.sort((a, b) => a.a.localeCompare(b.a));
+    else if (s === "progress") rows.sort((a, b) => b.prog - a.prog);
+    return rows;
+  }
+
+  function renderLibrary() {
+    const rows = libRows();
+    if (S.libSel >= rows.length) S.libSel = Math.max(0, rows.length - 1);
+    const head = " " + pad("Title", 26) + pad("Author", 14) + pad("Pages", 7) + pad("Progress", 12) + pad("Left", 6) + "Last";
+    let html = `<div class="lib"><div class="head">${esc(head)}</div>`;
+    rows.forEach((r, i) => {
+      const sel = i === S.libSel;
+      const mark = sel ? "▸ " : "  ";
+      const name = r.t + (r.prog === 100 ? " ✓" : "");
+      const line = mark + pad(name, 26) + pad(r.a, 14) + pad(r.pg, 7) + pad(bar(r.prog) + " " + r.prog + "%", 12) + pad(r.left, 6) + r.last;
+      html += `<span class="row${r.real ? "" : " off"}" aria-selected="${sel}">${esc(line)}</span>`;
+    });
+    html += "</div>";
+    if (S.libDetail) {
+      const r = rows[S.libSel];
+      if (r) {
+        html += `<div style="margin-top:.9rem;padding-top:.6rem;border-top:1px solid var(--term-edge);white-space:pre-wrap">`
+             + esc(`path      ${r.real ? SOURCE : "~/Books/" + r.t.toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".epub"}\n`)
+             + esc(`status    ${r.state}\n`)
+             + esc(`highlights ${r.real ? S.highlights.length : 0}   bookmarks ${r.real ? 0 : 0}\n`)
+             + esc(r.real ? "" : "not bundled with this demo")
+             + `</div>`;
+      }
+    }
+    pageEl.innerHTML = html;
+  }
+
+  function renderStatus() {
+    if (S.search !== null) { statusEl.textContent = S.searchDir + S.search; return; }
+    if (S.cmd !== null)    { statusEl.textContent = ":" + S.cmd; return; }
+    if (S.toast)           { statusEl.innerHTML = `<span class="toast">${esc(S.toast)}</span>`; return; }
+    if (S.view === "library") {
+      const rows = libRows();
+      statusEl.textContent = ` Library · ${rows.length} books · sort:${SORTS[S.libSort]} · filter:${FILTERS[S.libFilter]} `;
+      return;
+    }
+    const vis = S.mode === "visual" ? `<span class="vis">[VIS]</span> ` : "";
+    statusEl.innerHTML = vis + esc(` ${TITLE} · ${chapterLabel()} · page ${S.page + 1}/${cur().pages.length} `);
+  }
+
+  function renderPanel() {
+    const old = screen.querySelector(".panel");
+    if (old) old.remove();
+    if (!S.panel) return;
+    const d = document.createElement("div");
+    d.className = "panel";
+    if (S.panel === "toc") {
+      d.innerHTML = `<h4> Table of contents </h4><ul>` + BOOK.map((c, i) =>
+        `<li aria-selected="${i === S.panelSel}">${esc(c.t.padEnd(6))} ${esc(LAID[i].pages.length + " pages")}</li>`).join("") + `</ul>`;
+    } else if (S.panel === "hl") {
+      const hs = S.highlights;
+      d.innerHTML = `<h4> Highlights (${hs.length}) </h4>` + (hs.length
+        ? `<ul>` + hs.map((h, i) =>
+            `<li aria-selected="${i === S.panelSel}">${esc(BOOK[h.ch].t)}  "${esc(short(h.text, 46))}"  [ok]</li>`).join("") + `</ul>`
+        : `<p class="empty">No highlights yet — press v, move, then y.</p>`);
+    } else if (S.panel === "help") {
+      d.innerHTML = `<h4> Keys </h4><ul>` + [
+        "j k        page down / up",
+        "space b    page forward / back",
+        "d u        half page",
+        "gg G       first / last page",
+        "]] [[      next / prev chapter",
+        "/ ? n N    search, next, previous",
+        "v then y   highlight a passage",
+        "H  :hl     highlights panel",
+        ":toc       table of contents",
+        ":export    write Markdown",
+        "gt         cycle theme",
+        "q          back to library",
+        "Esc        close / cancel"
+      ].map(l => `<li>${esc(l)}</li>`).join("") + `</ul>`;
+    }
+    screen.appendChild(d);
+  }
+
+  const short = (s, n) => s.length <= n ? s : s.slice(0, n - 1) + "…";
+
+  /* ── export: a faithful port of src/export/markdown.rs ─────── */
+
+  const SAMPLE = [
+    { ch: "I",   text: "There is no difference between Time and any of the three dimensions of Space except that our consciousness moves along it." },
+    { ch: "III", text: "I am afraid I cannot convey the peculiar sensations of time travelling. They are excessively unpleasant." }
+  ];
+
+  function renderMarkdown() {
+    const el = $("#md-out");
+    const state = $("#md-state");
+    if (!S.highlights.length) {
+      // An example, so the payoff is legible before you touch anything.
+      if (state) state.textContent = "example";
+      let s = "";
+      s += `<span class="k">---</span>\n`;
+      s += `<span class="k">title:</span> ${esc(TITLE)}\n`;
+      s += `<span class="k">author:</span> ${esc(AUTHOR)}\n`;
+      s += `<span class="k">published:</span> ${PUBLISHED}\n`;
+      s += `<span class="k">exported:</span> 2026-04-20T14:32:00Z\n`;
+      s += `<span class="k">progress:</span> 34%\n`;
+      s += `<span class="k">source:</span> ${esc(SOURCE)}\n`;
+      s += `<span class="k">---</span>\n\n`;
+      SAMPLE.forEach(h => {
+        s += `<span class="h">## ${esc(h.ch)}</span>\n\n`;
+        s += `<span class="q">&gt; ${esc(h.text)}</span>\n\n`;
+        s += `<span class="k">---</span>\n\n`;
+      });
+      el.innerHTML = s;
+      return;
+    }
+    if (state) state.textContent = "live";
+    let s = "";
+    s += `<span class="k">---</span>\n`;
+    s += `<span class="k">title:</span> ${esc(TITLE)}\n`;
+    s += `<span class="k">author:</span> ${esc(AUTHOR)}\n`;
+    s += `<span class="k">published:</span> ${PUBLISHED}\n`;
+    s += `<span class="k">exported:</span> ${new Date().toISOString().replace(/\.\d+Z$/, "Z")}\n`;
+    s += `<span class="k">progress:</span> ${progressPct()}%\n`;
+    s += `<span class="k">source:</span> ${esc(SOURCE)}\n`;
+    s += `<span class="k">---</span>\n\n`;
+    let chapter = null;
+    S.highlights.forEach(h => {
+      const label = BOOK[h.ch].t;
+      if (label !== chapter) { chapter = label; s += `<span class="h">## ${esc(label)}</span>\n\n`; }
+      s += `<span class="q">&gt; ${esc(h.text.replace(/\n/g, " "))}</span>\n\n`;
+      s += `<span class="k">---</span>\n\n`;
+    });
+    el.innerHTML = s;
+  }
+
+  function progressPct() {
+    const total = LAID.reduce((n, l) => n + l.pages.length, 0);
+    let done = 0;
+    for (let i = 0; i < S.ch; i++) done += LAID[i].pages.length;
+    done += S.page + 1;
+    return Math.round(done / total * 100);
+  }
+
+  /* ── actions ────────────────────────────────────────────────── */
+
+  function goPage(n) {
+    const max = cur().pages.length - 1;
+    if (n < 0) {
+      if (S.ch > 0) { S.ch--; S.page = LAID[S.ch].pages.length - 1; } else S.page = 0;
+    } else if (n > max) {
+      if (S.ch < BOOK.length - 1) { S.ch++; S.page = 0; } else S.page = max;
+    } else S.page = n;
+  }
+
+  function chapter(d) {
+    const n = S.ch + d;
+    if (n < 0 || n >= BOOK.length) { toast(d > 0 ? "last chapter" : "first chapter"); return; }
+    S.ch = n; S.page = 0;
+  }
+
+  function yank() {
+    const a = Math.min(S.anchor, pageStartOff());
+    const b = Math.max(S.anchor, pageEndOff());
+    const text = cur().plain.slice(a, b).replace(/\s+/g, " ").trim();
+    if (!text) { S.mode = "normal"; return; }
+    S.highlights.push({ ch: S.ch, start: a, end: b, text });
+    S.mode = "normal";
+    toast(`highlighted ${text.length} chars — :export to write Markdown`);
+    renderMarkdown();
+  }
+
+  function runSearch(q) {
+    S.query = q; S.matches = []; S.matchIdx = -1;
+    if (!q) return;
+    const needle = q.toLowerCase();
+    LAID.forEach((l, ci) => {
+      const hay = l.plain.toLowerCase();
+      let at = hay.indexOf(needle);
+      while (at !== -1) { S.matches.push({ ch: ci, at }); at = hay.indexOf(needle, at + 1); }
+    });
+    if (!S.matches.length) { toast(`not found: ${q}`); return; }
+    S.matchIdx = 0; jumpMatch(0);
+  }
+
+  function jumpMatch(i) {
+    const m = S.matches[i]; if (!m) return;
+    S.ch = m.ch;
+    const pages = LAID[m.ch].pages;
+    let p = 0;
+    for (let k = 0; k < pages.length; k++) {
+      const first = pages[k][0], last = pages[k][pages[k].length - 1];
+      if (m.at >= first.start && m.at <= last.start + last.s.length) { p = k; break; }
+    }
+    S.page = p;
+    toast(`match ${i + 1}/${S.matches.length}`);
+  }
+
+  function runCmd(raw) {
+    const c = raw.trim();
+    if (c === "toc")  { S.panel = "toc"; S.panelSel = S.ch; return; }
+    if (c === "hl")   { S.panel = "hl"; S.panelSel = 0; return; }
+    if (c === "q")    { S.view = "library"; return; }
+    if (c === "w")    { toast("progress written"); return; }
+    if (c === "export") {
+      if (!S.highlights.length) { toast("no highlights to export"); return; }
+      S.exported = true;
+      renderMarkdown();
+      toast("exported: ~/Books/highlights/the-time-machine.md");
+      const md = $("#export");
+      if (md && !prefersStill()) md.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (c.startsWith("set ")) { toast("set " + c.slice(4)); return; }
+    toast("unknown command: " + c);
+  }
+
+  const prefersStill = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ── keys ───────────────────────────────────────────────────── */
+
+  const CONSUME = new Set([
+    "j","k","f","b","d","u","g","G","]","[","v","y","H","q","n","N","h","l","s",
+    ":","/","?","'","m","z","=","Escape","Enter","Backspace","ArrowUp","ArrowDown",
+    "ArrowLeft","ArrowRight"," ","F1"
+  ]);
+
+  term.addEventListener("keydown", (e) => {
+    if (e.metaKey || e.ctrlKey && !"fbdu".includes(e.key)) return;
+    const k = e.key;
+
+    // text entry modes first
+    if (S.search !== null) {
+      if (k === "Escape") { S.search = null; }
+      else if (k === "Enter") { const q = S.search; S.search = null; runSearch(q); }
+      else if (k === "Backspace") { S.search = S.search.slice(0, -1); }
+      else if (k.length === 1) { S.search += k; }
+      else return;
+      e.preventDefault(); render(); return;
+    }
+    if (S.cmd !== null) {
+      if (k === "Escape") { S.cmd = null; }
+      else if (k === "Enter") { const c = S.cmd; S.cmd = null; runCmd(c); }
+      else if (k === "Backspace") { S.cmd = S.cmd.slice(0, -1); }
+      else if (k.length === 1) { S.cmd += k; }
+      else return;
+      e.preventDefault(); render(); return;
+    }
+    if (S.panel) {
+      const len = S.panel === "toc" ? BOOK.length : (S.panel === "hl" ? S.highlights.length : 0);
+      if (k === "Escape" || k === "q") { S.panel = null; }
+      else if ((k === "j" || k === "ArrowDown") && len) { S.panelSel = Math.min(len - 1, S.panelSel + 1); }
+      else if ((k === "k" || k === "ArrowUp") && len) { S.panelSel = Math.max(0, S.panelSel - 1); }
+      else if (k === "Enter" && len) {
+        if (S.panel === "toc") { S.ch = S.panelSel; S.page = 0; }
+        else { const h = S.highlights[S.panelSel]; if (h) { S.ch = h.ch; jumpToOffset(h.start); } }
+        S.panel = null;
+      }
+      else if (k === "d" && S.panel === "hl" && S.highlights.length) {
+        S.highlights.splice(S.panelSel, 1);
+        S.panelSel = Math.max(0, S.panelSel - 1);
+        renderMarkdown();
+      }
+      else return;
+      e.preventDefault(); render(); return;
+    }
+
+    if (!CONSUME.has(k)) return;
+    e.preventDefault();
+
+    // chords
+    if (S.pending) {
+      const p = S.pending; S.pending = "";
+      if (p === "g" && k === "g") { S.page = 0; render(); return; }
+      if (p === "g" && k === "t") { cycleTheme(); render(); return; }
+      if (p === "]" && k === "]") { chapter(1); render(); return; }
+      if (p === "[" && k === "[") { chapter(-1); render(); return; }
+      if (p === "z" && k === "=") { toast("column width 68 → 55 → 80 (fixed in this demo)"); render(); return; }
+      if (p === "m") { toast(`mark '${k}' set`); render(); return; }
+      if (p === "'") { toast(`jumped to mark '${k}'`); render(); return; }
+      // fall through: treat k as a fresh key
+    }
+
+    if (S.view === "library") { libraryKey(k); render(); return; }
+
+    switch (k) {
+      case "j": case "ArrowDown": goPage(S.page + 1); break;
+      case "k": case "ArrowUp":   goPage(S.page - 1); break;
+      case " ": case "f":         goPage(S.page + 1); break;
+      case "b":                   goPage(S.page - 1); break;
+      case "d":                   goPage(S.page + 1); break;
+      case "u":                   goPage(S.page - 1); break;
+      case "G":                   S.page = cur().pages.length - 1; break;
+      case "g": case "]": case "[": case "z": case "m": case "'": S.pending = k; break;
+      case "v":
+        if (S.mode === "visual") { S.mode = "normal"; }
+        else { S.mode = "visual"; S.anchor = pageStartOff(); }
+        break;
+      case "y": if (S.mode === "visual") yank(); break;
+      case "H": S.panel = "hl"; S.panelSel = 0; break;
+      case "F1": S.panel = "help"; break;
+      case ":": S.cmd = ""; break;
+      case "/": S.search = ""; S.searchDir = "/"; break;
+      case "?": S.search = ""; S.searchDir = "?"; break;
+      case "n": if (S.matches.length) { S.matchIdx = (S.matchIdx + 1) % S.matches.length; jumpMatch(S.matchIdx); } break;
+      case "N": if (S.matches.length) { S.matchIdx = (S.matchIdx - 1 + S.matches.length) % S.matches.length; jumpMatch(S.matchIdx); } break;
+      case "Escape":
+        if (S.mode === "visual") S.mode = "normal";
+        else if (S.query) { S.query = ""; S.matches = []; }
+        break;
+      case "q":
+        if (S.mode === "visual") S.mode = "normal";
+        else { S.view = "library"; S.libSel = 0; }
+        break;
+    }
+    render();
+  });
+
+  function jumpToOffset(off) {
+    const pages = LAID[S.ch].pages;
+    for (let k = 0; k < pages.length; k++) {
+      const first = pages[k][0], last = pages[k][pages[k].length - 1];
+      if (off >= first.start && off <= last.start + last.s.length) { S.page = k; return; }
+    }
+    S.page = 0;
+  }
+
+  function cycleTheme() {
+    // the shipped renderer distinguishes light from everything else
+    S.theme = S.theme === "dark" ? "light" : "dark";
+    toast("theme: " + S.theme);
+  }
+
+  function libraryKey(k) {
+    const rows = libRows();
+    switch (k) {
+      case "j": case "ArrowDown": S.libSel = Math.min(rows.length - 1, S.libSel + 1); break;
+      case "k": case "ArrowUp":   S.libSel = Math.max(0, S.libSel - 1); break;
+      case "s": S.libSort = (S.libSort + 1) % SORTS.length; toast("sort: " + SORTS[S.libSort]); break;
+      case "f": S.libFilter = (S.libFilter + 1) % FILTERS.length; S.libSel = 0; toast("filter: " + FILTERS[S.libFilter]); break;
+      case "d": S.libDetail = !S.libDetail; break;
+      case "Escape": S.libDetail = false; break;
+      case "Enter": {
+        const r = rows[S.libSel];
+        if (!r) break;
+        if (r.real) { S.view = "reader"; S.page = 0; }
+        else toast(`only ${TITLE} is bundled with this demo`);
+        break;
+      }
+      case "q": toast("q would quit verso"); break;
+    }
+  }
+
+  /* ── focus affordance ───────────────────────────────────────── */
+
+  term.addEventListener("focus", () => {
+    term.dataset.focused = "1";
+    focusHint.textContent = "Keys are live — press j";
+  });
+  term.addEventListener("blur", () => {
+    term.dataset.focused = "0";
+    focusHint.innerHTML = "Click the window, then press <kbd>j</kbd>";
+  });
+  term.addEventListener("pointerdown", () => term.focus());
+
+  /* ── copy buttons ───────────────────────────────────────────── */
+
+  document.querySelectorAll(".copy").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const src = document.querySelector(btn.dataset.copy);
+      if (!src) return;
+      try {
+        await navigator.clipboard.writeText(src.innerText.trim());
+        const was = btn.textContent;
+        btn.textContent = "Copied"; btn.dataset.done = "1";
+        setTimeout(() => { btn.textContent = was; btn.dataset.done = "0"; }, 1600);
+      } catch { /* clipboard blocked — leave the text selectable */ }
+    });
+  });
+
+  /* ── re-anchoring demo ──────────────────────────────────────── */
+
+  const PASSAGE = "There is no difference between Time and any of the three dimensions of Space except that our consciousness moves along it.";
+  const EDITIONS = [
+    {
+      file: "the-time-machine.epub · as imported",
+      before: "It is only another way of looking at Time. ",
+      hl: PASSAGE,
+      after: " But some foolish people have got hold of the wrong side of that idea.",
+      status: "ok",
+      note: "Both context windows matched. Anchored exactly."
+    },
+    {
+      file: "the-time-machine.epub · re-imported, revised",
+      before: "It is merely another way of looking at Time itself. ",
+      hl: PASSAGE,
+      after: " But certain people have got hold of the wrong side of that notion.",
+      status: "drifted",
+      note: "Context moved; best-fit match found. Tagged *(drifted)* on export."
+    },
+    {
+      file: "the-time-machine.epub · re-imported, abridged",
+      before: "It is only another way of looking at Time. ",
+      hl: null,
+      after: " But some foolish people have got hold of the wrong side of that idea.",
+      status: "lost",
+      note: "Passage cut from this edition. Your captured text is kept."
+    }
+  ];
+  let edition = 0;
+  const aBody = $("#anchor-body"), aBadge = $("#anchor-badge"), aFile = $("#anchor-file"),
+        aNote = $("#anchor-note"), aNext = $("#anchor-next");
+
+  function paintAnchor() {
+    const e = EDITIONS[edition];
+    aFile.textContent = e.file;
+    aBadge.textContent = e.status;
+    aBadge.className = "badge " + e.status;
+    aNote.textContent = e.note;
+    aBody.innerHTML =
+      `<span class="ctx">…${esc(e.before)}</span>` +
+      (e.hl
+        ? `<span class="hl">${esc(e.hl)}</span>`
+        : `<span class="gone">${esc(PASSAGE)}</span>`) +
+      `<span class="ctx">${esc(e.after)}…</span>`;
+    aNext.textContent = edition === EDITIONS.length - 1 ? "Back to edition 1" : "Re-import edited edition";
+  }
+  aNext.addEventListener("click", () => { edition = (edition + 1) % EDITIONS.length; paintAnchor(); });
+
+  /* ── go ─────────────────────────────────────────────────────── */
+
+  paintAnchor();
+  renderMarkdown();
+  render();
+})();
+</script>
+</body>
+</html>
